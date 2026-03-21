@@ -482,7 +482,7 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
 }
 
 // Grafik Sayfası
-class HistoryChartPage extends StatelessWidget {
+class HistoryChartPage extends StatefulWidget {
   final String title;
   final String dataKey;
   final List<Map<String, dynamic>> historyData;
@@ -496,68 +496,156 @@ class HistoryChartPage extends StatelessWidget {
       required this.color});
 
   @override
+  State<HistoryChartPage> createState() => _HistoryChartPageState();
+}
+
+class _HistoryChartPageState extends State<HistoryChartPage> {
+  bool _showHistory = false;
+
+  @override
   Widget build(BuildContext context) {
-    if (historyData.isEmpty) {
-      return Scaffold(
-          appBar: AppBar(title: Text(title)),
-          body: const Center(
+    if (widget.historyData.isEmpty) {
+      return Container(
+          height: MediaQuery.of(context).size.height * 0.3,
+          decoration: const BoxDecoration(
+              color: AppTheme.bg,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+          child: const Center(
               child: Text("Henüz yeterli veri oluşmadı.",
                   style: TextStyle(color: Colors.grey))));
     }
     final currency =
         NumberFormat.currency(locale: "tr_TR", symbol: "₺", decimalDigits: 0);
 
-    return Scaffold(
-        appBar: AppBar(title: Text(title, style: TextStyle(color: color))),
-        body: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(children: [
-              Container(
-                  height: 250,
-                  padding: const EdgeInsets.only(
-                      top: 20, right: 10, left: 10, bottom: 10),
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                      color: AppTheme.card,
-                      borderRadius: BorderRadius.circular(20)),
-                  child: InteractiveHistoryChart(
-                      data: historyData,
-                      dataKey: dataKey,
-                      color: color,
-                      formatter: currency)),
-              const SizedBox(height: 20),
-              Expanded(
-                  child: ListView.builder(
-                      physics: const BouncingScrollPhysics(),
-                      itemCount: historyData.length,
-                      itemBuilder: (c, i) {
-                        int reverseIndex = historyData.length - 1 - i;
-                        var entry = historyData[reverseIndex];
-                        String rawDate = entry['date'].toString();
-                        String displayDate = rawDate;
-                        try {
-                          DateTime d = DateTime.parse(rawDate);
-                          displayDate =
-                              "${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}";
-                        } catch (e) {}
-                        return ListTile(
-                            leading: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.05),
-                                    shape: BoxShape.circle),
-                                child: const Icon(Icons.calendar_month_rounded,
-                                    color: Colors.grey, size: 18)),
-                            title: Text(displayDate,
-                                style: const TextStyle(
-                                    color: Colors.white70, fontSize: 14)),
-                            trailing: Text(currency.format(entry[dataKey]),
-                                style: const TextStyle(
-                                    color: Colors.white,
+    return Container(
+        height: _showHistory
+            ? MediaQuery.of(context).size.height * 0.85
+            : MediaQuery.of(context).size.height * 0.50,
+        decoration: const BoxDecoration(
+            color: AppTheme.bg,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+        child: Column(children: [
+          const SizedBox(height: 10),
+          Container(
+              width: 40,
+              height: 5,
+              decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(10))),
+          Padding(
+              padding: const EdgeInsets.only(
+                  left: 20, right: 10, top: 10, bottom: 5),
+              child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(widget.title,
+                        style: TextStyle(
+                            color: widget.color,
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5)),
+                    IconButton(
+                        icon: const Icon(Icons.close_rounded,
+                            color: Colors.white54, size: 28),
+                        onPressed: () => Navigator.pop(context)),
+                  ])),
+          Expanded(
+              child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(children: [
+                    Container(
+                        height: 200,
+                        margin: const EdgeInsets.symmetric(horizontal: 20),
+                        padding: const EdgeInsets.only(
+                            top: 20, right: 10, left: 10, bottom: 10),
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                            color: AppTheme.card,
+                            borderRadius: BorderRadius.circular(20)),
+                        child: InteractiveHistoryChart(
+                            data: widget.historyData,
+                            dataKey: widget.dataKey,
+                            color: widget.color,
+                            formatter: currency)),
+                    const SizedBox(height: 15),
+                    GestureDetector(
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        setState(() => _showHistory = !_showHistory);
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 20),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                            color: AppTheme.card,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white10)),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.history_rounded,
+                                color: AppTheme.goldMain, size: 20),
+                            const SizedBox(width: 8),
+                            const Text("GEÇMİŞ",
+                                style: TextStyle(
+                                    color: AppTheme.goldMain,
+                                    fontSize: 13,
                                     fontWeight: FontWeight.bold,
-                                    fontSize: 15),
-                                textAlign: TextAlign.end));
-                      }))
-            ])));
+                                    letterSpacing: 1.2)),
+                            const SizedBox(width: 8),
+                            Icon(
+                                _showHistory
+                                    ? Icons.keyboard_arrow_up_rounded
+                                    : Icons.keyboard_arrow_down_rounded,
+                                color: AppTheme.goldMain,
+                                size: 22),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (_showHistory) ...[
+                      const SizedBox(height: 10),
+                      ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: widget.historyData.length,
+                          itemBuilder: (c, i) {
+                            int reverseIndex =
+                                widget.historyData.length - 1 - i;
+                            var entry = widget.historyData[reverseIndex];
+                            String rawDate = entry['date'].toString();
+                            String displayDate = rawDate;
+                            try {
+                              DateTime d = DateTime.parse(rawDate);
+                              displayDate =
+                                  "${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}";
+                            } catch (e) {}
+                            return ListTile(
+                                dense: true,
+                                leading: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.05),
+                                        shape: BoxShape.circle),
+                                    child: const Icon(
+                                        Icons.calendar_month_rounded,
+                                        color: Colors.grey,
+                                        size: 18)),
+                                title: Text(displayDate,
+                                    style: const TextStyle(
+                                        color: Colors.white70, fontSize: 14)),
+                                trailing: Text(
+                                    currency.format(entry[widget.dataKey]),
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15),
+                                    textAlign: TextAlign.end));
+                          }),
+                    ],
+                    const SizedBox(height: 20),
+                  ]))),
+        ]));
   }
 }

@@ -23,6 +23,7 @@ class FullScreenAssetPage extends StatefulWidget {
 
 class _FullScreenAssetPageState extends State<FullScreenAssetPage> {
   String _selectedPeriod = '1A';
+  bool _showHistory = false;
 
   List<Map<String, dynamic>> _generateChartData(String period) {
     List<Map<String, dynamic>> result = [];
@@ -160,125 +161,164 @@ class _FullScreenAssetPageState extends State<FullScreenAssetPage> {
 
     List<Map<String, dynamic>> chartData = _generateChartData(_selectedPeriod);
 
-    return Scaffold(
-      backgroundColor: AppTheme.bg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(
-                  left: 20, right: 10, top: 10, bottom: 5),
-              child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(children: [
-                      AssetCoin(type: widget.asset, size: 36),
-                      const SizedBox(width: 12),
-                      Text(widget.asset.name,
-                          style: const TextStyle(
-                              fontSize: 19,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              letterSpacing: 0.5))
-                    ]),
-                    IconButton(
-                        icon: const Icon(Icons.close_rounded,
-                            color: Colors.white54, size: 28),
-                        onPressed: () => Navigator.pop(context)),
+    return Container(
+      height: _showHistory
+          ? MediaQuery.of(context).size.height * 0.85
+          : MediaQuery.of(context).size.height * 0.55,
+      decoration: const BoxDecoration(
+          color: AppTheme.bg,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+      child: Column(
+        children: [
+          const SizedBox(height: 10),
+          Container(
+              width: 40,
+              height: 5,
+              decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(10))),
+          Padding(
+            padding: const EdgeInsets.only(
+                left: 20, right: 10, top: 10, bottom: 5),
+            child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(children: [
+                    AssetCoin(type: widget.asset, size: 36),
+                    const SizedBox(width: 12),
+                    Text(widget.asset.name,
+                        style: const TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 0.5))
                   ]),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 10),
-                      child: Column(
-                        children: [
-                          Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                Column(children: [
-                                  const Text("ALIŞ",
-                                      style: TextStyle(
-                                          color: Colors.grey,
-                                          fontSize: 11,
-                                          letterSpacing: 1.2)),
-                                  const SizedBox(height: 5),
-                                  Text(buyStr,
-                                      style: const TextStyle(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFF00E676)))
-                                ]),
-                                Container(
-                                    width: 1,
-                                    height: 35,
-                                    color: Colors.white10),
-                                Column(children: [
-                                  const Text("SATIŞ",
-                                      style: TextStyle(
-                                          color: Colors.grey,
-                                          fontSize: 11,
-                                          letterSpacing: 1.2)),
-                                  const SizedBox(height: 5),
-                                  Text(sellStr,
-                                      style: const TextStyle(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.bold,
-                                          color: AppTheme.goldMain))
-                                ]),
+                  IconButton(
+                      icon: const Icon(Icons.close_rounded,
+                          color: Colors.white54, size: 28),
+                      onPressed: () => Navigator.pop(context)),
+                ]),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 10),
+                    child: Column(
+                      children: [
+                        Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              Column(children: [
+                                const Text("ALIŞ",
+                                    style: TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: 11,
+                                        letterSpacing: 1.2)),
+                                const SizedBox(height: 5),
+                                Text(buyStr,
+                                    style: const TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF00E676)))
                               ]),
-                          const SizedBox(height: 25),
-                          Container(
-                              padding: const EdgeInsets.all(3),
-                              decoration: BoxDecoration(
-                                  color: AppTheme.card,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: Colors.white10)),
-                              child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
-                                  children: [
-                                    _buildPeriodButton("1G", "1G"),
-                                    _buildPeriodButton("1A", "1A"),
-                                    _buildPeriodButton("1Y", "1Y"),
-                                  ])),
-                          const SizedBox(height: 15),
-                          Container(
-                              height: 190,
-                              padding: const EdgeInsets.only(
-                                  top: 20, right: 0, left: 0, bottom: 0),
-                              width: double.infinity,
-                              child: InteractiveChart(
-                                  data: chartData,
-                                  color: const Color(0xFF00E676),
-                                  formatter: format)),
+                              Container(
+                                  width: 1,
+                                  height: 35,
+                                  color: Colors.white10),
+                              Column(children: [
+                                const Text("SATIŞ",
+                                    style: TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: 11,
+                                        letterSpacing: 1.2)),
+                                const SizedBox(height: 5),
+                                Text(sellStr,
+                                    style: const TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppTheme.goldMain))
+                              ]),
+                            ]),
+                        const SizedBox(height: 20),
+                        Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                                color: AppTheme.card,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.white10)),
+                            child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  _buildPeriodButton("1G", "1G"),
+                                  _buildPeriodButton("1A", "1A"),
+                                  _buildPeriodButton("1Y", "1Y"),
+                                ])),
+                        const SizedBox(height: 15),
+                        Container(
+                            height: 160,
+                            padding: const EdgeInsets.only(
+                                top: 15, right: 0, left: 0, bottom: 0),
+                            width: double.infinity,
+                            child: InteractiveChart(
+                                data: chartData,
+                                color: const Color(0xFF00E676),
+                                formatter: format)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  GestureDetector(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      setState(() => _showHistory = !_showHistory);
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 20),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                          color: AppTheme.card,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white10)),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.history_rounded,
+                              color: AppTheme.goldMain, size: 20),
+                          const SizedBox(width: 8),
+                          const Text("GEÇMİŞ",
+                              style: TextStyle(
+                                  color: AppTheme.goldMain,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.2)),
+                          const SizedBox(width: 8),
+                          Icon(
+                              _showHistory
+                                  ? Icons.keyboard_arrow_up_rounded
+                                  : Icons.keyboard_arrow_down_rounded,
+                              color: AppTheme.goldMain,
+                              size: 22),
                         ],
                       ),
                     ),
-                    const Divider(color: Colors.white10, height: 40),
-                    const Padding(
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 20, vertical: 5),
-                        child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text("FİYAT GEÇMİŞİ (Son Puanlar)",
-                                style: TextStyle(
-                                    color: Colors.white38,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.2)))),
+                  ),
+                  if (_showHistory) ...[
+                    const SizedBox(height: 10),
                     ListView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      itemCount: chartData.length > 5 ? 5 : chartData.length,
+                      itemCount: chartData.length,
                       itemBuilder: (c, i) {
                         int index = chartData.length - 1 - i;
                         var item = chartData[index];
                         return ListTile(
+                          dense: true,
                           contentPadding:
                               const EdgeInsets.symmetric(horizontal: 20),
                           leading: Container(
@@ -299,13 +339,13 @@ class _FullScreenAssetPageState extends State<FullScreenAssetPage> {
                         );
                       },
                     ),
-                    const SizedBox(height: 30),
                   ],
-                ),
+                  const SizedBox(height: 20),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

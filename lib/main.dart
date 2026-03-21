@@ -163,14 +163,14 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   void _showAssetDetail(BuildContext context, AssetType asset) {
-    Navigator.push(
-        context,
-        MaterialPageRoute(
-            fullscreenDialog: true,
-            builder: (c) => FullScreenAssetPage(
-                asset: asset,
-                history: _motor.assetHistory,
-                intraDayHistory: _motor.intraDayHistory)));
+    showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (c) => FullScreenAssetPage(
+            asset: asset,
+            history: _motor.assetHistory,
+            intraDayHistory: _motor.intraDayHistory));
   }
 
   void _openCreator(bool isCredit) {
@@ -379,14 +379,15 @@ class _MainLayoutState extends State<MainLayout> {
           onMoreTap: _openFullMarket,
           onAssetTap: (a) => _showAssetDetail(context, a),
           onStatTap: (title, dataKey, color) {
-            Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (c) => HistoryChartPage(
-                        title: title,
-                        dataKey: dataKey,
-                        historyData: _motor.historyData,
-                        color: color)));
+            showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (c) => HistoryChartPage(
+                    title: title,
+                    dataKey: dataKey,
+                    historyData: _motor.historyData,
+                    color: color));
           },
           isPrimaryEngineActive: _motor.isPrimaryEngineActive,
           onRefresh: () async => await _motor.fetchLiveData(silent: false)),
