@@ -5,14 +5,19 @@ workflows:
     integrations:
       app_store_connect: codemegic
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.drksistem.altinasistanim
       flutter: stable
     scripts:
       - name: Flutter Paketlerini Yukle
         script: flutter pub get
-      - name: iOS Uygulamasini Derle ve Imzala
+      - name: Mac Guvenlik Anahtarligini Baslat
+        script: keychain initialize
+      - name: Apple Sertifikalarini Otomatik Olustur
+        script: app-store-connect fetch-signing-files "com.drksistem.altinasistanim" --type IOS_APP_STORE --create
+      - name: Sertifikalari Sisteme Ekle
+        script: keychain add-certificates
+      - name: Xcode Projesini Imzalamaya Hazirla
+        script: xcode-project use-profiles
+      - name: iOS Uygulamasini Derle (IPA)
         script: flutter build ipa --release --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
