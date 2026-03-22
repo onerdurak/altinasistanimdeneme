@@ -11,6 +11,12 @@ workflows:
         script: flutter pub get
       - name: Mac Guvenlik Anahtarligini Baslat
         script: keychain initialize
+      - name: Sertifika Anahtari Olustur
+        script: |
+          openssl genrsa -out /tmp/certificate_key.pem 2048
+          echo "CERTIFICATE_PRIVATE_KEY<<EOF" >> $CM_ENV
+          cat /tmp/certificate_key.pem >> $CM_ENV
+          echo "EOF" >> $CM_ENV
       - name: Apple Sertifikalarini Otomatik Olustur
         script: app-store-connect fetch-signing-files "com.drksistem.altinasistanim" --type IOS_APP_STORE --create
       - name: Sertifikalari Sisteme Ekle
@@ -25,4 +31,3 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
-
