@@ -14,7 +14,7 @@ import 'sayfalar/guvenlik_sayfalari.dart';
 import 'sayfalar/piyasa_sayfalari.dart';
 import 'sayfalar/portfoy_sayfalari.dart';
 import 'sayfalar/destek_sayfasi.dart';
-import 'bilesenler/grafikler.dart'; // <-- HATA VEREN KISIM BURASIYDI, DÜZELTİLDİ
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
