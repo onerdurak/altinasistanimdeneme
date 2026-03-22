@@ -2,14 +2,54 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../modeller.dart';
 
-/// Yeni şık simgeler – beğenmezseniz AssetCoinClassic ile değiştirin.
+/// Altın kategorileri klasik stil, diğerleri yeni şık stil.
 class AssetCoin extends StatelessWidget {
   final AssetType type;
   final double size;
   const AssetCoin({super.key, required this.type, this.size = 28});
 
+  bool get _useClassic =>
+      type.category == 'gold' ||
+      type.category == 'bracelet' ||
+      type.category == 'ons';
+
   @override
   Widget build(BuildContext context) {
+    if (_useClassic) return _buildClassic();
+    return _buildModern();
+  }
+
+  Widget _buildClassic() {
+    final colors = (type.category == 'ons')
+        ? [const Color(0xFFFFCC80), AppTheme.btcColor]
+        : [const Color(0xFFFFF59D), const Color(0xFFFBC02D)];
+    return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+                colors: colors,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight),
+            boxShadow: [
+              BoxShadow(
+                  color: colors.last.withOpacity(0.4),
+                  blurRadius: 4,
+                  offset: const Offset(1, 1))
+            ],
+            border:
+                Border.all(color: Colors.white.withOpacity(0.4), width: 1)),
+        alignment: Alignment.center,
+        child: Text(type.label,
+            style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.w900,
+                fontSize:
+                    type.label.length > 2 ? size * 0.32 : size * 0.45)));
+  }
+
+  Widget _buildModern() {
     final config = _iconConfig(type);
     return Container(
         width: size,
@@ -53,14 +93,6 @@ class AssetCoin extends StatelessWidget {
 
   static _CoinStyle _iconConfig(AssetType type) {
     switch (type.category) {
-      case 'gold':
-        return _CoinStyle(
-            const Color(0xFFB8860B), const Color(0xFF6B4E00),
-            Colors.white, type.label);
-      case 'bracelet':
-        return _CoinStyle(
-            const Color(0xFFA07000), const Color(0xFF5C3D00),
-            Colors.white, type.label);
       case 'silver':
         return _CoinStyle(
             const Color(0xFF90A4AE), const Color(0xFF37474F),
@@ -87,10 +119,6 @@ class AssetCoin extends StatelessWidget {
         return _CoinStyle(
             const Color(0xFF546E7A), const Color(0xFF263238),
             Colors.white, 'Ξ');
-      case 'ons':
-        return _CoinStyle(
-            const Color(0xFFCC8800), const Color(0xFF7A5200),
-            Colors.white, type.label);
       default:
         return _CoinStyle(
             const Color(0xFFE65100), const Color(0xFF8B3000),
@@ -105,64 +133,6 @@ class _CoinStyle {
   final Color textColor;
   final String symbol;
   const _CoinStyle(this.inner, this.outer, this.textColor, this.symbol);
-}
-
-/// Eski simgeler – geri dönmek isterseniz yukarıdaki AssetCoin'i silin,
-/// bu sınıfın adını AssetCoin olarak değiştirin.
-class AssetCoinClassic extends StatelessWidget {
-  final AssetType type;
-  final double size;
-  const AssetCoinClassic({super.key, required this.type, this.size = 28});
-
-  @override
-  Widget build(BuildContext context) {
-    List<Color> colors;
-    Color textColor;
-    if (type.category == 'silver') {
-      colors = [AppTheme.silverLight, AppTheme.silverDark];
-      textColor = Colors.black87;
-    } else if (type.category == 'currency') {
-      if (type.id == 'usd') {
-        colors = [const Color(0xFFB9F6CA), const Color(0xFF00C853)];
-      } else if (type.id == 'gbp') {
-        colors = [const Color(0xFFE1BEE7), const Color(0xFF8E24AA)];
-      } else {
-        colors = [const Color(0xFF82B1FF), const Color(0xFF2962FF)];
-      }
-      textColor = Colors.black87;
-    } else if (type.category == 'crypto' || type.category == 'ons') {
-      colors = [const Color(0xFFFFCC80), AppTheme.btcColor];
-      textColor = Colors.black;
-    } else if (type.category == 'bracelet' || type.category == 'gold') {
-      colors = [const Color(0xFFFFF59D), const Color(0xFFFBC02D)];
-      textColor = Colors.black;
-    } else {
-      colors = [const Color(0xFFFFECB3), const Color(0xFFFF6F00)];
-      textColor = Colors.brown[900]!;
-    }
-    return Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-                colors: colors,
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight),
-            boxShadow: [
-              BoxShadow(
-                  color: colors.last.withOpacity(0.4),
-                  blurRadius: 4,
-                  offset: const Offset(1, 1))
-            ],
-            border: Border.all(color: Colors.white.withOpacity(0.4), width: 1)),
-        alignment: Alignment.center,
-        child: Text(type.label,
-            style: TextStyle(
-                color: textColor,
-                fontWeight: FontWeight.w900,
-                fontSize: type.label.length > 2 ? size * 0.32 : size * 0.45)));
-  }
 }
 
 class MiniStat extends StatelessWidget {
