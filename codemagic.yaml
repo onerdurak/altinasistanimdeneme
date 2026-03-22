@@ -1,0 +1,22 @@
+workflows:
+  ios-testflight:
+    name: iOS TestFlight Derlemesi
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: codemegic
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.drksistem.altinasistanim
+      flutter: stable
+    scripts:
+      - name: Flutter Paketlerini Yukle
+        script: flutter pub get
+      - name: iOS Uygulamasini Derle ve Imzala
+        script: flutter build ipa --release --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
