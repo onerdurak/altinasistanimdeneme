@@ -133,8 +133,8 @@ class _FullMarketPageState extends State<FullMarketPage> {
                       const SizedBox(width: 15),
                       ReorderableDragStartListener(
                           index: i,
-                          child: const Icon(Icons.drag_indicator,
-                              color: Colors.white24, size: 24)),
+                          child: const Icon(Icons.swap_vert,
+                              color: Colors.white38, size: 22)),
                     ],
                   ),
                 ),
