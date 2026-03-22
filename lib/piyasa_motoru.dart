@@ -939,7 +939,7 @@ class PiyasaMotoru {
     String todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
     int index =
         historyData.indexWhere((element) => element['date'] == todayKey);
-    // Kasadaki emtia isimlerini not olarak kaydet
+    // Her bölüm için emtia notlarını ayrı kaydet
     List<String> walletNotes = [];
     wallet.assets.forEach((assetId, qty) {
       try {
@@ -948,6 +948,34 @@ class PiyasaMotoru {
       } catch (e) {}
     });
 
+    List<String> creditNotes = [];
+    for (var item in credits) {
+      List<String> parts = [];
+      item.assets.forEach((assetId, qty) {
+        try {
+          var asset = market.firstWhere((e) => e.id == assetId);
+          parts.add("${formatNumber(qty)} ${asset.name}");
+        } catch (e) {}
+      });
+      if (parts.isNotEmpty) {
+        creditNotes.add("${item.personName}: ${parts.join(', ')}");
+      }
+    }
+
+    List<String> debtNotes = [];
+    for (var item in debts) {
+      List<String> parts = [];
+      item.assets.forEach((assetId, qty) {
+        try {
+          var asset = market.firstWhere((e) => e.id == assetId);
+          parts.add("${formatNumber(qty)} ${asset.name}");
+        } catch (e) {}
+      });
+      if (parts.isNotEmpty) {
+        debtNotes.add("${item.personName}: ${parts.join(', ')}");
+      }
+    }
+
     Map<String, dynamic> todayData = {
       'date': todayKey,
       'net': (wVal + cVal - dVal),
@@ -955,6 +983,9 @@ class PiyasaMotoru {
       'credit': cVal,
       'debt': dVal,
       'note': walletNotes.join(', '),
+      'wallet_note': walletNotes.join('\n'),
+      'credit_note': creditNotes.join('\n'),
+      'debt_note': debtNotes.join('\n'),
     };
     if (index != -1) {
       historyData[index] = todayData;

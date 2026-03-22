@@ -587,24 +587,66 @@ class _HistoryChartPageState extends State<HistoryChartPage> {
                         displayDate =
                             "${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}";
                       } catch (e) {}
-                      return ListTile(
-                          leading: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.05),
-                                  shape: BoxShape.circle),
-                              child: const Icon(Icons.calendar_month_rounded,
-                                  color: Colors.grey, size: 18)),
-                          title: Text(displayDate,
-                              style: const TextStyle(
-                                  color: Colors.white70, fontSize: 14)),
-                          trailing: Text(
-                              currency.format(entry[widget.dataKey]),
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15),
-                              textAlign: TextAlign.end));
+
+                      // dataKey'e göre ilgili bölümün emtia notunu al
+                      String noteKey = '${widget.dataKey}_note';
+                      String note = (entry[noteKey] ?? entry['note'] ?? '')
+                          .toString();
+
+                      return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                              color: AppTheme.card,
+                              borderRadius: BorderRadius.circular(12)),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(children: [
+                                        Container(
+                                            padding: const EdgeInsets.all(6),
+                                            decoration: BoxDecoration(
+                                                color: Colors.white
+                                                    .withOpacity(0.05),
+                                                shape: BoxShape.circle),
+                                            child: const Icon(
+                                                Icons.calendar_month_rounded,
+                                                color: Colors.grey,
+                                                size: 16)),
+                                        const SizedBox(width: 8),
+                                        Text(displayDate,
+                                            style: const TextStyle(
+                                                color: Colors.white70,
+                                                fontSize: 14)),
+                                      ]),
+                                      Text(
+                                          currency
+                                              .format(entry[widget.dataKey]),
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 15)),
+                                    ]),
+                                if (note.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  const Divider(
+                                      color: Colors.white10, height: 1),
+                                  const SizedBox(height: 8),
+                                  ...note.split('\n').map((line) => Padding(
+                                      padding:
+                                          const EdgeInsets.only(bottom: 3),
+                                      child: Text(line,
+                                          style: const TextStyle(
+                                              color: Colors.grey,
+                                              fontSize: 12),
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 2))),
+                                ],
+                              ]));
                     }),
               ],
               const SizedBox(height: 20),
