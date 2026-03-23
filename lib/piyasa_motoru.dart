@@ -952,13 +952,41 @@ class PiyasaMotoru {
     String todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
     int index =
         historyData.indexWhere((element) => element['date'] == todayKey);
-    // Her bölüm için emtia notlarını ayrı kaydet
+    // Önceki günün kasa varlıklarını bul (sadece eklenen farkı göster)
+    Map<String, double> prevWalletAssets = {};
+    // Bugünün mevcut kaydını atla, ondan önceki son kaydı al
+    for (int i = historyData.length - 1; i >= 0; i--) {
+      if (historyData[i]['date'] != todayKey && historyData[i]['wallet_assets'] != null) {
+        Map<String, dynamic> raw = historyData[i]['wallet_assets'] is Map
+            ? historyData[i]['wallet_assets']
+            : {};
+        raw.forEach((k, v) => prevWalletAssets[k] = (v as num).toDouble());
+        break;
+      }
+    }
+
+    // Her bölüm için emtia notlarını ayrı kaydet (sadece eklenenler)
     List<String> walletNotes = [];
     wallet.assets.forEach((assetId, qty) {
       try {
         var asset = market.firstWhere((e) => e.id == assetId);
-        walletNotes.add("${formatNumber(qty)} ${asset.name}");
+        double prev = prevWalletAssets[assetId] ?? 0;
+        double diff = qty - prev;
+        if (diff > 0.001) {
+          walletNotes.add("+${formatNumber(diff)} ${asset.name}");
+        } else if (diff < -0.001) {
+          walletNotes.add("${formatNumber(diff)} ${asset.name}");
+        }
       } catch (e) {}
+    });
+    // Silinen varlıkları da kontrol et
+    prevWalletAssets.forEach((assetId, prevQty) {
+      if (!wallet.assets.containsKey(assetId) && prevQty > 0.001) {
+        try {
+          var asset = market.firstWhere((e) => e.id == assetId);
+          walletNotes.add("-${formatNumber(prevQty)} ${asset.name}");
+        } catch (e) {}
+      }
     });
 
     List<String> creditNotes = [];
@@ -999,6 +1027,7 @@ class PiyasaMotoru {
       'wallet_note': walletNotes.join('\n'),
       'credit_note': creditNotes.join('\n'),
       'debt_note': debtNotes.join('\n'),
+      'wallet_assets': Map<String, double>.from(wallet.assets),
     };
     if (index != -1) {
       historyData[index] = todayData;
