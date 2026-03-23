@@ -311,17 +311,6 @@ class _MainLayoutState extends State<MainLayout> {
                     MaterialPageRoute(
                         builder: (c) => const FullDisclaimerPage()));
               }),
-          ListTile(
-              leading:
-                  const Icon(Icons.store_rounded, color: AppTheme.goldMain),
-              title: const Text("Geliştirici Sayfası"),
-              onTap: () async {
-                Navigator.pop(context);
-                await launchUrl(
-                    Uri.parse(
-                        "https://play.google.com/store/apps/developer?id=Drksistem"),
-                    mode: LaunchMode.externalApplication);
-              }),
           const Spacer(),
           const Divider(color: Colors.white10),
           ListTile(
