@@ -41,12 +41,24 @@ class PiyasaMotoru {
 
   PiyasaMotoru({required this.onUpdate});
 
+  void _recalcLiveValues() {
+    _syncCustomAssets();
+    liveWalletVal = wallet.getTotalValue(market);
+    liveCreditVal =
+        credits.fold(0, (sum, i) => sum + i.getTotalValue(market));
+    liveDebtVal = debts.fold(0, (sum, i) => sum + i.getTotalValue(market));
+    liveNetWorth = liveWalletVal + liveCreditVal - liveDebtVal;
+    onUpdate();
+  }
+
   void baslat() {
     _initializeMarketSkeleton();
     loadMarketOrder();
     loadAllUserData().then((_) {
       loadMarketCache();
+      _recalcLiveValues();
       fetchLiveData().then((_) {
+        _recalcLiveValues();
         fillHistoricalGaps();
       });
     });
