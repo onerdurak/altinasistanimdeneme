@@ -244,7 +244,7 @@ class QuickAccessGrid extends StatefulWidget {
 }
 
 class _QuickAccessGridState extends State<QuickAccessGrid> {
-  List<String?> slots = List.filled(8, null);
+  List<String?> slots = List.filled(16, null);
   bool isEditing = false;
 
   @override
@@ -259,12 +259,18 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
     if (saved != null) {
       setState(() {
         slots = saved.map((e) => e == "null" ? null : e).toList();
-        while (slots.length < 8) slots.add(null);
+        while (slots.length < 16) slots.add(null);
       });
     } else {
       setState(() {
-        if (widget.market.isNotEmpty) slots[0] = "gram";
-        if (widget.market.length > 10) slots[1] = "usd";
+        const defaultSlots = [
+          "gram", "gram22", "ceyrek", "yarim",
+          "tam", "ata", "yarim_gram22", "ons",
+          "usd", "eur", "silver", "btc",
+        ];
+        for (int j = 0; j < defaultSlots.length && j < 16; j++) {
+          slots[j] = defaultSlots[j];
+        }
       });
     }
   }
@@ -388,7 +394,7 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
         child: GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: 8,
+            itemCount: 16,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 childAspectRatio: 2.2,
