@@ -94,8 +94,16 @@ class _ListingPageState extends State<ListingPage> {
                                   width: 3))),
                       child: Column(
                         children: [
-                          Padding(
+                          Container(
                             padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: widget.isCredit
+                                  ? Colors.transparent
+                                  : const Color(0xFF2A1215),
+                              borderRadius: const BorderRadius.only(
+                                topRight: Radius.circular(16),
+                              ),
+                            ),
                             child: Row(
                               children: [
                                 Expanded(
@@ -164,11 +172,6 @@ class _ListingPageState extends State<ListingPage> {
                                                   color: Colors.white70,
                                                   fontSize: 13)),
                                         ),
-                                        Text(
-                                            "${formatNumber(qty)} ${asset.label}",
-                                            style: const TextStyle(
-                                                color: Colors.white54,
-                                                fontSize: 12)),
                                         const SizedBox(width: 10),
                                         Text(currency.format(assetVal),
                                             style: const TextStyle(
