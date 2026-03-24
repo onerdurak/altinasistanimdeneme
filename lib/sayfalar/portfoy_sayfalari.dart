@@ -29,6 +29,7 @@ class ListingPage extends StatefulWidget {
 
 class _ListingPageState extends State<ListingPage> {
   String? _editingItemId;
+  final Set<String> _collapsedItems = {};
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +64,7 @@ class _ListingPageState extends State<ListingPage> {
             var item = widget.items[i];
             double val = item.getTotalValue(widget.market);
             bool isEditing = _editingItemId == item.id;
+            bool isExpanded = !_collapsedItems.contains(item.id);
 
             return GestureDetector(
                 onLongPress: () {
@@ -81,7 +83,6 @@ class _ListingPageState extends State<ListingPage> {
                   children: [
                     Container(
                       margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                           color: AppTheme.card,
                           borderRadius: BorderRadius.circular(16),
@@ -91,26 +92,94 @@ class _ListingPageState extends State<ListingPage> {
                                       ? AppTheme.neonGreen
                                       : AppTheme.neonRed,
                                   width: 3))),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      child: Column(
                         children: [
-                          Expanded(
-                              child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                Text(item.personName,
+                          Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                    child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                      Text(item.personName,
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold),
+                                          overflow: TextOverflow.ellipsis),
+                                    ])),
+                                const SizedBox(width: 10),
+                                Text(currency.format(val),
                                     style: const TextStyle(
                                         color: Colors.white,
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold),
-                                    overflow: TextOverflow.ellipsis),
-                              ])),
-                          const SizedBox(width: 10),
-                          Text(currency.format(val),
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold)),
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold)),
+                                const SizedBox(width: 8),
+                                GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      if (isExpanded) {
+                                        _collapsedItems.add(item.id);
+                                      } else {
+                                        _collapsedItems.remove(item.id);
+                                      }
+                                    });
+                                  },
+                                  child: Icon(
+                                    isExpanded
+                                        ? Icons.expand_less
+                                        : Icons.expand_more,
+                                    color: Colors.white38,
+                                    size: 22,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (isExpanded && item.assets.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                  left: 16, right: 16, bottom: 12),
+                              child: Column(
+                                children: item.assets.entries.map((entry) {
+                                  final assetId = entry.key;
+                                  final qty = entry.value;
+                                  final asset = widget.market.cast<AssetType?>().firstWhere(
+                                      (g) => g!.id == assetId,
+                                      orElse: () => null);
+                                  if (asset == null) return const SizedBox.shrink();
+                                  final assetVal = asset.sellPrice * qty;
+                                  return Padding(
+                                    padding:
+                                        const EdgeInsets.only(bottom: 6),
+                                    child: Row(
+                                      children: [
+                                        AssetCoin(type: asset, size: 28),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(asset.name,
+                                              style: const TextStyle(
+                                                  color: Colors.white70,
+                                                  fontSize: 13)),
+                                        ),
+                                        Text(
+                                            "${formatNumber(qty)} ${asset.label}",
+                                            style: const TextStyle(
+                                                color: Colors.white54,
+                                                fontSize: 12)),
+                                        const SizedBox(width: 10),
+                                        Text(currency.format(assetVal),
+                                            style: const TextStyle(
+                                                color: Colors.white54,
+                                                fontSize: 12)),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
                         ],
                       ),
                     ),
