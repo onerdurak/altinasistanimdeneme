@@ -98,7 +98,7 @@ class _ListingPageState extends State<ListingPage> {
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               color: widget.isCredit
-                                  ? Colors.transparent
+                                  ? const Color(0xFF122A15)
                                   : const Color(0xFF2A1215),
                               borderRadius: const BorderRadius.only(
                                 topRight: Radius.circular(16),
