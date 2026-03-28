@@ -183,7 +183,7 @@ class PiyasaMotoru {
 
   // Sheets verisini 30 saniye sonra arka planda çek (Binance'i beklemesin)
   void _scheduleSheetsUpdate() {
-    Future.delayed(const Duration(seconds: 30), () async {
+    Future.delayed(const Duration(seconds: 4), () async {
       await _fetchSheetsData();
     });
   }

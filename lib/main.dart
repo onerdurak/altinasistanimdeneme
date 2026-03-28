@@ -268,9 +268,9 @@ class _MainLayoutState extends State<MainLayout> {
                             color: AppTheme.goldMain,
                             fontSize: 18,
                             fontWeight: FontWeight.bold)),
-                    Text("Sürüm: 1.0.15",
+                    const Text("Sürüm: 1.0.15",
                         style: TextStyle(
-                            color: Colors.white.withOpacity(0.5), fontSize: 12))
+                            color: Color(0x80FFFFFF), fontSize: 12))
                   ]))),
           ListTile(
               leading:
@@ -419,7 +419,8 @@ class _MainLayoutState extends State<MainLayout> {
     final securedPages = rawPages
         .asMap()
         .entries
-        .map((e) => _buildSecuredPage(e.key, e.value))
+        .map((e) => RepaintBoundary(
+            child: _buildSecuredPage(e.key, e.value)))
         .toList();
 
     return Scaffold(
@@ -445,9 +446,9 @@ class _MainLayoutState extends State<MainLayout> {
         body: RefreshIndicator(
             color: AppTheme.goldMain,
             backgroundColor: AppTheme.card,
-            onRefresh: () async => await _motor.fetchLiveData(silent: false),
+            onRefresh: () async => await _motor.fetchLiveData(force: true),
             child: PageView(
-                physics: const AlwaysScrollableScrollPhysics(),
+                physics: const BouncingScrollPhysics(),
                 controller: _pageController,
                 onPageChanged: (i) => setState(() => _navIndex = i),
                 children: securedPages)),
