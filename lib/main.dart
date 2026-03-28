@@ -100,6 +100,7 @@ class _MainLayoutState extends State<MainLayout> {
   final LocalAuthentication _localAuth = LocalAuthentication();
   bool _isAppLocked = false;
   String _appPin = "0000";
+  bool _isPageScrolling = false;
 
   @override
   void initState() {
@@ -107,9 +108,18 @@ class _MainLayoutState extends State<MainLayout> {
     _loadAuthData();
 
     _motor = PiyasaMotoru(onUpdate: () {
-      if (mounted) setState(() {});
+      // Sayfa kaydırılırken rebuild yapma — donmayı engeller
+      if (mounted && !_isPageScrolling) setState(() {});
     });
     _motor.baslat();
+
+    // PageView scroll durumunu dinle
+    _pageController.addListener(() {
+      final isScrolling = _pageController.position.isScrollingNotifier.value;
+      if (isScrolling != _isPageScrolling) {
+        _isPageScrolling = isScrolling;
+      }
+    });
   }
 
   @override
@@ -450,7 +460,10 @@ class _MainLayoutState extends State<MainLayout> {
             child: PageView(
                 physics: const BouncingScrollPhysics(),
                 controller: _pageController,
-                onPageChanged: (i) => setState(() => _navIndex = i),
+                onPageChanged: (i) {
+                  _isPageScrolling = false;
+                  setState(() => _navIndex = i);
+                },
                 children: securedPages)),
         floatingActionButton:
             (_navIndex == 1 || _navIndex == 2) && !_isAppLocked
