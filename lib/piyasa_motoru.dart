@@ -130,7 +130,7 @@ class PiyasaMotoru {
     });
   }
 
-  // --- MOTOR TETİKLEYİCİSİ (İZOLASYON VE SIRALAMA) ---
+  // --- MOTOR TETİKLEYİCİSİ ---
   Future<void> fetchLiveData({bool silent = false}) async {
     if (!silent) {
       isLoading = true;
@@ -138,28 +138,19 @@ class PiyasaMotoru {
     }
 
     try {
-      // 1. BİRİNCİ MOTOR: BİNANCE (Ana Motor)
+      // 1. BİRİNCİ MOTOR: GOOGLE SHEETS (Altın Fiyatları)
+      bool isSheetsSuccess = await _fetchFromSheetsEngine();
+      isPrimaryEngineActive = isSheetsSuccess;
+
+      // 2. İKİNCİ MOTOR: BİNANCE (Döviz + Kripto + ONS Altını)
       bool isBinanceSuccess = await _fetchFromBinanceEngine();
-      isPrimaryEngineActive = isBinanceSuccess;
 
-      // 2. İKİNCİ MOTOR: TRUNCGIL (Sadece Binance Çökerse Çalışır - Yedek Motor)
-      bool isTruncgilSuccess = false;
-      if (!isBinanceSuccess) {
-        isTruncgilSuccess = await _fetchFromTruncgilEngine();
-      }
+      isLiveConnection = isSheetsSuccess || isBinanceSuccess;
 
-      // İnternet var mı yok mu kontrolü
-      isLiveConnection = isBinanceSuccess || isTruncgilSuccess;
-
-      // 3. ÜÇÜNCÜ MOTOR: TCMB (Döviz kurlarını TCMB'den doğrula/güncelle)
       if (isLiveConnection) {
-        await _fetchFromTcmbEngine();
-      }
-
-      // Eğer sistem Binance'den değil de yedek motor Truncgil'den çalıştıysa,
-      // Truncgil kriptoları eksik verebilir, bu yüzden sadece kripto için Binance'i tekrar yokla
-      if (!isBinanceSuccess && isLiveConnection) {
-        await _fetchCryptoFromBinance();
+        _syncCustomAssets();
+        updateDailyHistory();
+        saveMarketCache();
       }
     } catch (e) {
       isLiveConnection = false;
@@ -172,363 +163,195 @@ class PiyasaMotoru {
   }
 
   // ------------------------------------------------------------------
-  // BİRİNCİ MOTOR: BINANCE (Tamamen Bağımsız)
+  // BİRİNCİ MOTOR: GOOGLE SHEETS (Altın & Gümüş Fiyatları)
+  // ------------------------------------------------------------------
+  Future<bool> _fetchFromSheetsEngine() async {
+    try {
+      final response = await http.get(Uri.parse(
+          'https://docs.google.com/spreadsheets/d/1hXX1HmhjTGihxapua3D9iV3gq0kNRufy2ZQDD7HykeU/export?format=csv'));
+      if (response.statusCode != 200) return false;
+
+      // CSV satırlarını parse et (tırnak içindeki virgüllere dikkat)
+      Map<String, Map<String, double>> sheetData = {};
+      List<String> lines = response.body.split('\n');
+      for (int i = 1; i < lines.length; i++) {
+        String line = lines[i].trim();
+        if (line.isEmpty) continue;
+        List<String> cols = _parseCsvLine(line);
+        if (cols.length < 4) continue;
+        String kod = cols[0].trim().toLowerCase();
+        double sell = _parseTurkishNumber(cols[1]);
+        double buy = _parseTurkishNumber(cols[2]);
+        double change = _parseTurkishNumber(cols[3]);
+        if (kod.isNotEmpty && sell > 0) {
+          sheetData[kod] = {'sell': sell, 'buy': buy, 'change': change};
+        }
+      }
+
+      if (sheetData.isEmpty) return false;
+
+      // Sheets'ten güncellenecek varlıklar (ons Binance'den gelecek)
+      const sheetsIds = [
+        'has', 'gram', 'gram22', 'ceyrek', 'yarim', 'tam',
+        'ata', 'resat', 'hamit', 'gremse', 'bilezik14', 'silver'
+      ];
+
+      bool anyUpdated = false;
+      for (var asset in market) {
+        if (!sheetsIds.contains(asset.id)) continue;
+        var data = sheetData[asset.id];
+        if (data == null) continue;
+        double sell = data['sell']!;
+        double buy = data['buy']!;
+        double change = data['change']!;
+        if (sell <= 0) continue;
+        if (buy <= 0) buy = sell * 0.98;
+        asset.applyNewPrices(sell, buy, change);
+        anyUpdated = true;
+      }
+
+      return anyUpdated;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // İKİNCİ MOTOR: BİNANCE (USD, EUR, ONS Altını, BTC, ETH)
   // ------------------------------------------------------------------
   Future<bool> _fetchFromBinanceEngine() async {
     try {
-      final binanceUsdRes = await http.get(Uri.parse(
-          'https://api.binance.com/api/v3/ticker/24hr?symbol=USDTTRY'));
-      final binanceEurRes = await http.get(Uri.parse(
-          'https://api.binance.com/api/v3/ticker/24hr?symbol=EURUSDT'));
-      final binancePaxgRes = await http.get(Uri.parse(
-          'https://api.binance.com/api/v3/ticker/24hr?symbol=PAXGUSDT'));
-      final binanceBtcRes = await http.get(Uri.parse(
-          'https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT'));
-      final binanceEthRes = await http.get(Uri.parse(
-          'https://api.binance.com/api/v3/ticker/24hr?symbol=ETHUSDT'));
+      final results = await Future.wait([
+        http.get(Uri.parse(
+            'https://api.binance.com/api/v3/ticker/24hr?symbol=USDTTRY')),
+        http.get(Uri.parse(
+            'https://api.binance.com/api/v3/ticker/24hr?symbol=EURUSDT')),
+        http.get(Uri.parse(
+            'https://api.binance.com/api/v3/ticker/24hr?symbol=PAXGUSDT')),
+        http.get(Uri.parse(
+            'https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT')),
+        http.get(Uri.parse(
+            'https://api.binance.com/api/v3/ticker/24hr?symbol=ETHUSDT')),
+      ]);
 
-      if (binanceUsdRes.statusCode != 200 || binancePaxgRes.statusCode != 200)
-        return false;
+      final usdRes = results[0];
+      if (usdRes.statusCode != 200) return false;
 
-      double usdTry =
-          double.parse(json.decode(binanceUsdRes.body)['lastPrice']);
-      double usdChange =
-          double.parse(json.decode(binanceUsdRes.body)['priceChangePercent']);
-      double eurUsd =
-          double.parse(json.decode(binanceEurRes.body)['lastPrice']);
-      double eurTry = eurUsd * usdTry;
-      double eurChange =
-          double.parse(json.decode(binanceEurRes.body)['priceChangePercent']);
-
-      double goldOns =
-          double.parse(json.decode(binancePaxgRes.body)['lastPrice']);
-      double goldOnsChange =
-          double.parse(json.decode(binancePaxgRes.body)['priceChangePercent']);
-
-      double btcUsd =
-          double.parse(json.decode(binanceBtcRes.body)['lastPrice']);
-      double btcChange =
-          double.parse(json.decode(binanceBtcRes.body)['priceChangePercent']);
-      double ethUsd =
-          double.parse(json.decode(binanceEthRes.body)['lastPrice']);
-      double ethChange =
-          double.parse(json.decode(binanceEthRes.body)['priceChangePercent']);
-
+      final usdData = json.decode(usdRes.body);
+      double usdTry = double.parse(usdData['lastPrice']);
+      double usdChange = double.parse(usdData['priceChangePercent']);
       currentUsdRate = usdTry;
 
-      double goldTlChange =
-          (((1 + (goldOnsChange / 100)) * (1 + (usdChange / 100))) - 1) * 100;
-      double rawHasAltinTL = (goldOns / 31.1035) * usdTry;
-      double silverBaseTL = rawHasAltinTL / 66.0;
+      double eurUsd = 0, eurChange = 0;
+      if (results[1].statusCode == 200) {
+        final d = json.decode(results[1].body);
+        eurUsd = double.parse(d['lastPrice']);
+        eurChange = double.parse(d['priceChangePercent']);
+      }
+      double eurTry = eurUsd > 0 ? eurUsd * usdTry : 0;
 
-      Map<String, double> basePrices = {
-        "has": rawHasAltinTL,
-        "gram": rawHasAltinTL,
-        "ceyrek": rawHasAltinTL * 1.605,
-        "yarim": rawHasAltinTL * 3.210,
-        "tam": rawHasAltinTL * 6.420,
-        "ata": rawHasAltinTL * 6.610,
-        "gremse": rawHasAltinTL * 16.050,
-        "resat": rawHasAltinTL * 6.610,
-        "hamit": rawHasAltinTL * 6.610,
-        "gram22": rawHasAltinTL * 0.916,
-        "yarim_gram22": (rawHasAltinTL * 0.916) / 2,
-        "bilezik14": rawHasAltinTL * 0.585,
-        "silver": silverBaseTL,
-        "usd": usdTry,
-        "eur": eurTry,
-        "gbp": usdTry * 1.26,
-        "ons": goldOns * usdTry,
-        "btc": btcUsd * usdTry,
-        "eth": ethUsd * usdTry,
-      };
-
-      Map<String, double> usdPrices = {
-        "ons": goldOns,
-        "btc": btcUsd,
-        "eth": ethUsd
-      };
-      Map<String, double> changeRates = {
-        "usd": usdChange,
-        "eur": eurChange,
-        "gbp": usdChange,
-        "ons": goldOnsChange,
-        "btc": btcChange,
-        "eth": ethChange,
-      };
-
-      for (var asset in market) {
-        double baseP = basePrices[asset.id] ?? 0;
-        double usdP = usdPrices[asset.id] ?? 0;
-        double cRate = changeRates[asset.id] ?? 0;
-
-        if (baseP > 0) {
-          if (asset.category == 'gold' || asset.category == 'silver') {
-            double haremSellPrice = baseP * asset.sellMarkup;
-            double haremBuyPrice = baseP * asset.buyMarkup;
-
-            double dynamicMargin = 0;
-            if (asset.category == 'gold') dynamicMargin = baseP * 0.01;
-
-            double finalSellPrice = haremSellPrice + dynamicMargin;
-            double finalBuyPrice = haremBuyPrice;
-
-            double assetChange =
-                asset.category == 'gold' ? goldTlChange : goldTlChange * 0.5;
-
-            double oldRawP = baseP / (1 + (assetChange / 100));
-            double rawPremium = baseP * (asset.sellMarkup - 1.0);
-            double oldSellPrice = oldRawP +
-                rawPremium +
-                (asset.category == 'gold' ? (oldRawP * 0.01) : 0);
-            double customRate = oldSellPrice != 0
-                ? ((finalSellPrice / oldSellPrice) - 1) * 100
-                : assetChange;
-
-            asset.applyNewPrices(finalSellPrice, finalBuyPrice, customRate,
-                nUsd: usdP > 0 ? usdP : (baseP / usdTry));
-          } else {
-            asset.applyNewPrices(
-                baseP * asset.sellMarkup, baseP * asset.buyMarkup, cRate,
-                nUsd: usdP > 0 ? usdP : (baseP / usdTry));
-          }
-        }
+      double goldOnsUsd = 0, onsChange = 0;
+      if (results[2].statusCode == 200) {
+        final d = json.decode(results[2].body);
+        goldOnsUsd = double.parse(d['lastPrice']);
+        onsChange = double.parse(d['priceChangePercent']);
       }
 
-      _syncCustomAssets();
-      updateDailyHistory();
-      saveMarketCache();
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
+      double btcUsd = 0, btcChange = 0;
+      if (results[3].statusCode == 200) {
+        final d = json.decode(results[3].body);
+        btcUsd = double.parse(d['lastPrice']);
+        btcChange = double.parse(d['priceChangePercent']);
+      }
 
-  // ------------------------------------------------------------------
-  // İKİNCİ MOTOR: TRUNCGIL (Tamamen Bağımsız)
-  // ------------------------------------------------------------------
-  Future<bool> _fetchFromTruncgilEngine() async {
-    try {
-      final response = await http.get(
-          Uri.parse('https://finans.truncgil.com/v4/today.json'),
-          headers: {"User-Agent": "Mozilla/5.0"});
-      if (response.statusCode != 200) return false;
-
-      Map<String, dynamic> data = json.decode(response.body);
-      double gramFiyat = 0, usdFiyat = 0;
-
-      double hasAltinTL = _safeDouble(data['HAS ALTIN']['Selling']);
-      if (hasAltinTL == 0)
-        hasAltinTL = _safeDouble(data['GRAM ALTIN']['Selling']);
-      if (hasAltinTL == 0) return false;
-
-      // Truncgil'den gelen fiyat Harem kârlı olabilir, ham base fiyata çevir
-      double rawHasAltinTL = hasAltinTL / 1.0767;
-
-      double usdTry = _safeDouble(data['USD']['Selling']);
-      if (usdTry == 0) usdTry = currentUsdRate;
+      double ethUsd = 0, ethChange = 0;
+      if (results[4].statusCode == 200) {
+        final d = json.decode(results[4].body);
+        ethUsd = double.parse(d['lastPrice']);
+        ethChange = double.parse(d['priceChangePercent']);
+      }
 
       for (var asset in market) {
-        dynamic apiItem;
-        for (String key in asset.jsonKeys) {
-          if (data.containsKey(key)) {
-            apiItem = data[key];
+        switch (asset.id) {
+          case 'usd':
+            asset.applyNewPrices(usdTry * asset.sellMarkup,
+                usdTry * asset.buyMarkup, usdChange);
             break;
-          }
-        }
-
-        if (asset.category == 'gold' || asset.category == 'silver') {
-          double weight = 1.0;
-          if (asset.id == "ceyrek")
-            weight = 1.605;
-          else if (asset.id == "yarim")
-            weight = 3.210;
-          else if (asset.id == "tam")
-            weight = 6.420;
-          else if (asset.id == "ata" ||
-              asset.id == "resat" ||
-              asset.id == "hamit")
-            weight = 6.610;
-          else if (asset.id == "gremse")
-            weight = 16.050;
-          else if (asset.id == "gram22")
-            weight = 0.916;
-          else if (asset.id == "yarim_gram22")
-            weight = 0.458;
-          else if (asset.id == "bilezik14")
-            weight = 0.585;
-          else if (asset.id == "silver") weight = 1 / 66.0;
-
-          double baseP = rawHasAltinTL * weight;
-          double rawChangeRate = _safeDouble(data['HAS ALTIN']['Change']);
-
-          double haremSellPrice = baseP * asset.sellMarkup;
-          double haremBuyPrice = baseP * asset.buyMarkup;
-
-          double dynamicMargin = 0;
-          if (asset.category == 'gold') dynamicMargin = baseP * 0.01;
-
-          double finalSellPrice = haremSellPrice + dynamicMargin;
-          double finalBuyPrice = haremBuyPrice;
-
-          double rawPremium = baseP * (asset.sellMarkup - 1.0);
-          double oldRawP = baseP / (1 + (rawChangeRate / 100));
-          double oldSellPrice = oldRawP +
-              rawPremium +
-              (asset.category == 'gold' ? (oldRawP * 0.01) : 0);
-          double customRate = oldSellPrice != 0
-              ? ((finalSellPrice / oldSellPrice) - 1) * 100
-              : rawChangeRate;
-
-          asset.applyNewPrices(finalSellPrice, finalBuyPrice, customRate);
-
-          if (asset.id == "gram") gramFiyat = baseP;
-        } else if (apiItem != null && apiItem is Map) {
-          if (asset.category == 'crypto') {
-            double usdP = _safeDouble(apiItem['USD_Price']);
-            double tryP =
-                _safeDouble(apiItem['TRY_Price'] ?? apiItem['Selling']);
-            double cRate = _safeDouble(apiItem['Change']);
-
-            if (usdP > 0 && tryP > 0) {
-              asset.applyNewPrices(
-                  tryP * asset.sellMarkup, tryP * asset.buyMarkup, cRate,
-                  nUsd: usdP);
-            } else if (tryP > 0) {
-              asset.applyNewPrices(
-                  tryP * asset.sellMarkup, tryP * asset.buyMarkup, cRate,
-                  nUsd: tryP / (currentUsdRate > 0 ? currentUsdRate : 34.0));
+          case 'eur':
+            if (eurTry > 0) {
+              asset.applyNewPrices(eurTry * asset.sellMarkup,
+                  eurTry * asset.buyMarkup, eurChange);
             }
-          } else {
-            double rawSell = _safeDouble(apiItem['Selling']);
-            double rawBuy = _safeDouble(apiItem['Buying']);
-            if (rawBuy <= 0) rawBuy = rawSell;
-
-            if (asset.id == "usd") {
-              usdFiyat = rawSell;
-              currentUsdRate = rawSell;
+            break;
+          case 'ons':
+            if (goldOnsUsd > 0) {
+              double onsTry = goldOnsUsd * usdTry;
+              asset.applyNewPrices(onsTry, onsTry, onsChange,
+                  nUsd: goldOnsUsd);
             }
-            asset.applyNewPrices(rawSell * asset.sellMarkup,
-                rawBuy * asset.buyMarkup, _safeDouble(apiItem['Change']));
-          }
+            break;
+          case 'btc':
+            if (btcUsd > 0) {
+              double btcTry = btcUsd * usdTry;
+              asset.applyNewPrices(btcTry, btcTry, btcChange, nUsd: btcUsd);
+            }
+            break;
+          case 'eth':
+            if (ethUsd > 0) {
+              double ethTry = ethUsd * usdTry;
+              asset.applyNewPrices(ethTry, ethTry, ethChange, nUsd: ethUsd);
+            }
+            break;
         }
       }
 
-      if (gramFiyat > 0 && usdFiyat > 0) {
-        int onsIndex = market.indexWhere((e) => e.id == "ons");
-        if (onsIndex != -1) {
-          double onsUsd = (gramFiyat / usdFiyat) * 31.1035;
-          double onsTL = gramFiyat * 31.1035;
-          market[onsIndex].applyNewPrices(
-              onsTL, onsTL, market[onsIndex].changeRate,
-              nUsd: onsUsd);
-        }
-      }
-
-      _syncCustomAssets();
-      updateDailyHistory();
-      saveMarketCache();
       return true;
     } catch (e) {
       return false;
     }
   }
 
-  Future<void> _fetchCryptoFromBinance() async {
-    try {
-      List<String> symbolsToFetch = ["BTCUSDT", "ETHUSDT"];
-      for (String sym in symbolsToFetch) {
-        final uri = Uri.parse(
-            'https://data-api.binance.vision/api/v3/ticker/24hr?symbol=$sym');
-        final response = await http.get(uri, headers: {
-          "User-Agent": "Mozilla/5.0",
-          "Accept": "application/json"
-        });
-        if (response.statusCode == 200) {
-          Map<String, dynamic> item = json.decode(response.body);
-          double lastPrice =
-              double.tryParse(item['lastPrice'].toString()) ?? 0.0;
-          double change =
-              double.tryParse(item['priceChangePercent'].toString()) ?? 0.0;
-          String assetId = sym == "BTCUSDT" ? "btc" : "eth";
-          var asset = market.firstWhere((e) => e.id == assetId,
-              orElse: () => market.first);
-
-          if (asset.id != market.first.id) {
-            double usdRateToUse = currentUsdRate > 0 ? currentUsdRate : 44.0;
-            double tryPrice = lastPrice * usdRateToUse;
-            asset.baseSellPrice = tryPrice * asset.sellMarkup;
-            asset.baseBuyPrice = tryPrice * asset.buyMarkup;
-            asset.sellPrice = tryPrice * asset.sellMarkup;
-            asset.buyPrice = tryPrice * asset.buyMarkup;
-            asset.changeRate = change;
-            asset.usdPrice = lastPrice;
-            asset.baseUsdPrice = lastPrice;
-          }
-        }
+  // Tırnak içindeki virgülleri doğru parse eden CSV satır ayrıştırıcı
+  List<String> _parseCsvLine(String line) {
+    List<String> result = [];
+    bool inQuotes = false;
+    StringBuffer current = StringBuffer();
+    for (int i = 0; i < line.length; i++) {
+      String ch = line[i];
+      if (ch == '"') {
+        inQuotes = !inQuotes;
+      } else if (ch == ',' && !inQuotes) {
+        result.add(current.toString().trim());
+        current.clear();
+      } else {
+        current.write(ch);
       }
-    } catch (e) {}
+    }
+    result.add(current.toString().trim());
+    return result;
   }
 
-  // ------------------------------------------------------------------
-  // ÜÇÜNCÜ MOTOR: TCMB (Döviz Kurları - API Key Gerektirmez)
-  // ------------------------------------------------------------------
-  Future<bool> _fetchFromTcmbEngine() async {
+  // Türkçe sayı formatını double'a çevirir: "6.805,69" → 6805.69, "2,74%" → 2.74
+  double _parseTurkishNumber(String raw) {
     try {
-      final response = await http.get(
-          Uri.parse('https://www.tcmb.gov.tr/kurlar/today.xml'),
-          headers: {"User-Agent": "Mozilla/5.0"});
-      if (response.statusCode != 200) return false;
-
-      String body = response.body;
-
-      double usdSelling = _extractTcmbRate(body, 'USD', 'ForexSelling');
-      double usdBuying = _extractTcmbRate(body, 'USD', 'ForexBuying');
-      double eurSelling = _extractTcmbRate(body, 'EUR', 'ForexSelling');
-      double eurBuying = _extractTcmbRate(body, 'EUR', 'ForexBuying');
-      double gbpSelling = _extractTcmbRate(body, 'GBP', 'ForexSelling');
-      double gbpBuying = _extractTcmbRate(body, 'GBP', 'ForexBuying');
-
-      if (usdSelling <= 0) return false;
-
-      currentUsdRate = usdSelling;
-
-      for (var asset in market) {
-        if (asset.id == 'usd') {
-          asset.applyNewPrices(usdSelling, usdBuying, asset.changeRate);
-        } else if (asset.id == 'eur') {
-          asset.applyNewPrices(eurSelling, eurBuying, asset.changeRate);
-        } else if (asset.id == 'gbp') {
-          asset.applyNewPrices(gbpSelling, gbpBuying, asset.changeRate);
-        }
+      String s = raw.trim().replaceAll('%', '').replaceAll('"', '');
+      if (s.contains('.') && s.contains(',')) {
+        // 6.805,69 → binlik nokta, ondalık virgül
+        s = s.replaceAll('.', '').replaceAll(',', '.');
+      } else if (s.contains(',')) {
+        s = s.replaceAll(',', '.');
       }
-      return true;
+      return double.tryParse(s) ?? 0.0;
     } catch (e) {
-      return false;
+      return 0.0;
     }
   }
 
-  double _extractTcmbRate(String xml, String currencyCode, String field) {
-    RegExp currencyRegex = RegExp(
-        'CurrencyCode="$currencyCode"[^>]*>([\\s\\S]*?)</Currency>',
-        multiLine: true);
-    Match? currencyMatch = currencyRegex.firstMatch(xml);
-    if (currencyMatch == null) return 0.0;
-
-    String currencyBlock = currencyMatch.group(1) ?? '';
-    RegExp fieldRegex = RegExp('<$field>([^<]+)</$field>');
-    Match? fieldMatch = fieldRegex.firstMatch(currencyBlock);
-    if (fieldMatch == null) return 0.0;
-
-    return double.tryParse(fieldMatch.group(1)?.trim() ?? '') ?? 0.0;
-  }
-
   // ------------------------------------------------------------------
-  // GEÇMİŞ VERİ BOŞLUKLARINI DOLDUR (Binance Klines + TCMB)
+  // GEÇMİŞ VERİ BOŞLUKLARINI DOLDUR (Binance Klines)
   // ------------------------------------------------------------------
   Future<void> fillHistoricalGaps() async {
     try {
-      // Hardcoded verilerdeki en son tarihi bul
       List<String> allDates = assetHistory.keys.toList()..sort();
       if (allDates.isEmpty) return;
 
@@ -537,20 +360,16 @@ class PiyasaMotoru {
       DateTime today = DateTime.now();
       int gapDays = today.difference(lastDate).inDays;
 
-      // 2 günden az boşluk varsa gerek yok
       if (gapDays < 2) return;
 
-      // Zaten doldurulmuş mu kontrol et
       final prefs = await SharedPreferences.getInstance();
       String? lastFillDate = prefs.getString('last_gap_fill_date');
       String todayKey = DateFormat('yyyy-MM-dd').format(today);
       if (lastFillDate == todayKey) return;
 
-      // Binance'den günlük kapanış fiyatları çek (max 365 gün)
       int limit = gapDays > 365 ? 365 : gapDays + 1;
       int startTime = lastDate.millisecondsSinceEpoch;
 
-      // 5 paralel istek: USDTTRY, EURUSDT, PAXGUSDT, BTCUSDT, ETHUSDT
       final results = await Future.wait([
         _fetchKlines('USDTTRY', startTime, limit),
         _fetchKlines('EURUSDT', startTime, limit),
@@ -567,7 +386,6 @@ class PiyasaMotoru {
 
       if (usdRates.isEmpty && goldOnsUsd.isEmpty) return;
 
-      // Her gün için fiyatları hesapla
       Set<String> allNewDates = {
         ...usdRates.keys,
         ...goldOnsUsd.keys,
@@ -575,7 +393,6 @@ class PiyasaMotoru {
       };
 
       for (String dateKey in allNewDates) {
-        // Zaten varsa atla
         if (assetHistory.containsKey(dateKey)) continue;
 
         double usdTry = usdRates[dateKey] ?? currentUsdRate;
@@ -586,7 +403,6 @@ class PiyasaMotoru {
         double btc = btcUsd[dateKey] ?? 0;
         double eth = ethUsd[dateKey] ?? 0;
 
-        // Altın gram bazı hesapla (ons -> gram)
         double rawBase = (paxgUsd / 31.1035) * usdTry;
         if (rawBase <= 0) continue;
 
@@ -616,12 +432,10 @@ class PiyasaMotoru {
 
         double silverBaseTL = rawBase / 66.0;
         double eurTry = eurUsd * usdTry;
-        double gbpTry = usdTry * 1.26;
 
         dPrices["silver"] = silverBaseTL * 1.0957;
         dPrices["usd"] = usdTry * 1.004;
         dPrices["eur"] = eurTry * 1.004;
-        dPrices["gbp"] = gbpTry * 1.004;
         dPrices["ons"] = paxgUsd * usdTry;
         dPrices["btc"] = btc * usdTry;
         dPrices["eth"] = eth * usdTry;
@@ -629,11 +443,10 @@ class PiyasaMotoru {
         assetHistory[dateKey] = dPrices;
       }
 
-      // Kaydet
       await prefs.setString('asset_history_v2', jsonEncode(assetHistory));
       await prefs.setString('last_gap_fill_date', todayKey);
     } catch (e) {
-      // Sessizce devam et, kritik değil
+      // Sessizce devam et
     }
   }
 
@@ -648,7 +461,6 @@ class PiyasaMotoru {
 
       List<dynamic> klines = json.decode(response.body);
       for (var kline in klines) {
-        // kline[0] = openTime (ms), kline[4] = close price
         int openTimeMs = kline[0];
         DateTime date = DateTime.fromMillisecondsSinceEpoch(openTimeMs);
         String dateKey = DateFormat('yyyy-MM-dd').format(date);
@@ -661,19 +473,6 @@ class PiyasaMotoru {
       // Sessizce devam et
     }
     return result;
-  }
-
-  double _safeDouble(dynamic value) {
-    if (value == null) return 0.0;
-    if (value is num) return value.toDouble();
-    if (value is String) {
-      String c = value.replaceAll('\$', '').replaceAll('%', '').trim();
-      if (c.contains('.') && c.contains(','))
-        c = c.replaceAll('.', '').replaceAll(',', '.');
-      else if (c.contains(',')) c = c.replaceAll(',', '.');
-      return double.tryParse(c) ?? 0.0;
-    }
-    return 0.0;
   }
 
   void _initializeMarketSkeleton() {
@@ -891,16 +690,15 @@ class PiyasaMotoru {
         }
 
         double eurTry = usdTry * 1.08;
-        double gbpTry = usdTry * 1.26;
         double ethUsd = btcUsd * 0.05;
         double goldOns = (rawBase / usdTry) * 31.1035;
 
-        // Gümüş: Gerçek veri varsa kullan, yoksa altından tahmin et
         double silverPrice = 0.0;
         if (realSilverHistory.containsKey(dateKey)) {
           silverPrice = realSilverHistory[dateKey]!;
         } else {
-          List<String> sortedSilverDates = realSilverHistory.keys.toList()..sort();
+          List<String> sortedSilverDates = realSilverHistory.keys.toList()
+            ..sort();
           String? before;
           String? after;
           for (var d in sortedSilverDates) {
@@ -927,7 +725,6 @@ class PiyasaMotoru {
         dPrices["silver"] = silverPrice;
         dPrices["usd"] = usdTry * 1.004;
         dPrices["eur"] = eurTry * 1.004;
-        dPrices["gbp"] = gbpTry * 1.004;
         dPrices["ons"] = goldOns;
         dPrices["btc"] = btcUsd;
         dPrices["eth"] = ethUsd;
@@ -964,11 +761,11 @@ class PiyasaMotoru {
     String todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
     int index =
         historyData.indexWhere((element) => element['date'] == todayKey);
-    // Önceki günün kasa varlıklarını bul (sadece eklenen farkı göster)
+
     Map<String, double> prevWalletAssets = {};
-    // Bugünün mevcut kaydını atla, ondan önceki son kaydı al
     for (int i = historyData.length - 1; i >= 0; i--) {
-      if (historyData[i]['date'] != todayKey && historyData[i]['wallet_assets'] != null) {
+      if (historyData[i]['date'] != todayKey &&
+          historyData[i]['wallet_assets'] != null) {
         Map<String, dynamic> raw = historyData[i]['wallet_assets'] is Map
             ? historyData[i]['wallet_assets']
             : {};
@@ -977,7 +774,6 @@ class PiyasaMotoru {
       }
     }
 
-    // Her bölüm için emtia notlarını ayrı kaydet (sadece eklenenler)
     List<String> walletNotes = [];
     wallet.assets.forEach((assetId, qty) {
       try {
@@ -991,7 +787,6 @@ class PiyasaMotoru {
         }
       } catch (e) {}
     });
-    // Silinen varlıkları da kontrol et
     prevWalletAssets.forEach((assetId, prevQty) {
       if (!wallet.assets.containsKey(assetId) && prevQty > 0.001) {
         try {
