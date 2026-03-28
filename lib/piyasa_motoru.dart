@@ -458,6 +458,9 @@ class PiyasaMotoru {
             (rawBase * 0.585 * 1.3242) + (rawBase * 0.585 * 0.01);
 
         if (silverTl > 0) dPrices["silver"] = silverTl;
+        // Sheets Türkçe locale bozulması koruması (443.086 → 44.3086)
+        if (usdTry > 100) usdTry = usdTry / 10;
+        if (eurTry > 100) eurTry = eurTry / 10;
         if (usdTry > 0) dPrices["usd"] = usdTry * 1.004;
         if (eurTry > 0) dPrices["eur"] = eurTry * 1.004;
         // BTC, ETH, ONS her zaman USD bazında
