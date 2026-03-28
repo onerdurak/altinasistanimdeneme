@@ -408,7 +408,8 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
                     orElse: () => widget.market[0]);
               bool isDollar = asset?.isDollarBase ?? false;
 
-              return GestureDetector(
+              return RepaintBoundary(
+                child: GestureDetector(
                   onTap: () => _onSlotTap(i),
                   onLongPress: () => _onLongPress(i),
                   child: Stack(clipBehavior: Clip.none, children: [
@@ -491,7 +492,7 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
                                       shape: BoxShape.circle),
                                   child: const Icon(Icons.close,
                                       color: Colors.white, size: 16))))
-                  ]));
+                  ])));
             }));
   }
 }

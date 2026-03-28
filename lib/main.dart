@@ -112,14 +112,6 @@ class _MainLayoutState extends State<MainLayout> {
       if (mounted && !_isPageScrolling) setState(() {});
     });
     _motor.baslat();
-
-    // PageView scroll durumunu dinle
-    _pageController.addListener(() {
-      final isScrolling = _pageController.position.isScrollingNotifier.value;
-      if (isScrolling != _isPageScrolling) {
-        _isPageScrolling = isScrolling;
-      }
-    });
   }
 
   @override
@@ -429,8 +421,9 @@ class _MainLayoutState extends State<MainLayout> {
     final securedPages = rawPages
         .asMap()
         .entries
-        .map((e) => RepaintBoundary(
-            child: _buildSecuredPage(e.key, e.value)))
+        .map((e) => _KeepAlivePage(
+            child: RepaintBoundary(
+                child: _buildSecuredPage(e.key, e.value))))
         .toList();
 
     return Scaffold(
@@ -453,17 +446,21 @@ class _MainLayoutState extends State<MainLayout> {
                       onPressed: () => Scaffold.of(context).openEndDrawer())),
               const SizedBox(width: 5),
             ]),
-        body: RefreshIndicator(
-            color: AppTheme.goldMain,
-            backgroundColor: AppTheme.card,
-            onRefresh: () async => await _motor.fetchLiveData(force: true),
+        body: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification is ScrollStartNotification) {
+                _isPageScrolling = true;
+              } else if (notification is ScrollEndNotification) {
+                _isPageScrolling = false;
+                // Kaydırma bitti, son durumu göster
+                if (mounted) setState(() {});
+              }
+              return false;
+            },
             child: PageView(
                 physics: const BouncingScrollPhysics(),
                 controller: _pageController,
-                onPageChanged: (i) {
-                  _isPageScrolling = false;
-                  setState(() => _navIndex = i);
-                },
+                onPageChanged: (i) => _navIndex = i,
                 children: securedPages)),
         floatingActionButton:
             (_navIndex == 1 || _navIndex == 2) && !_isAppLocked
@@ -503,5 +500,26 @@ class _MainLayoutState extends State<MainLayout> {
                   selectedIcon: Icon(Icons.wallet, color: AppTheme.goldMain),
                   label: "Kasa"),
             ]));
+  }
+}
+
+/// Sayfaları hafızada tutar — PageView geçişinde yok edilip yeniden çizilmez
+class _KeepAlivePage extends StatefulWidget {
+  final Widget child;
+  const _KeepAlivePage({required this.child});
+
+  @override
+  State<_KeepAlivePage> createState() => _KeepAlivePageState();
+}
+
+class _KeepAlivePageState extends State<_KeepAlivePage>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }
