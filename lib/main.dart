@@ -268,7 +268,7 @@ class _MainLayoutState extends State<MainLayout> {
                             color: AppTheme.goldMain,
                             fontSize: 18,
                             fontWeight: FontWeight.bold)),
-                    Text("Sürüm: 1.0.13",
+                    Text("Sürüm: 1.0.15",
                         style: TextStyle(
                             color: Colors.white.withOpacity(0.5), fontSize: 12))
                   ]))),
