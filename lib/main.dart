@@ -207,6 +207,7 @@ class _MainLayoutState extends State<MainLayout> {
                       ? _motor.credits.add(item)
                       : _motor.debts.add(item));
                   _motor.saveAllUserData();
+                  _motor.recalcLiveValues();
                 })));
   }
 
@@ -221,12 +222,13 @@ class _MainLayoutState extends State<MainLayout> {
                     onUpdate: () {
                       setState(() {});
                       _motor.saveAllUserData();
+                      _motor.recalcLiveValues();
                     },
                     onRefresh: () async =>
                         await _motor.fetchLiveData(silent: false),
                     onAssetTap: (asset) => _showAssetDetail(context, asset))))
         .then((_) {
-      setState(() {});
+      _motor.recalcLiveValues();
     });
   }
 
@@ -256,6 +258,7 @@ class _MainLayoutState extends State<MainLayout> {
       }
     });
     _motor.saveAllUserData();
+    _motor.recalcLiveValues();
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text("Kayıt silindi"), duration: Duration(seconds: 1)));
   }
@@ -433,6 +436,7 @@ class _MainLayoutState extends State<MainLayout> {
           onUpdate: () {
             setState(() {});
             _motor.saveAllUserData();
+            _motor.recalcLiveValues();
           },
           onRefresh: () async => await _motor.fetchLiveData(silent: false),
           onAssetTap: (asset) => _showAssetDetail(context, asset))

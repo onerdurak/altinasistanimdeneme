@@ -790,6 +790,7 @@ class _PortfolioDetailState extends State<PortfolioDetail> {
                   var asset = widget.market.firstWhere((g) => g.id == id,
                       orElse: () =>
                           AssetType("0", [], "?", "?", 0.0, 0.0, "gold"));
+                  // Kasa: kuyumcu alış (sende varsa satarsın), Borç/Alacak: kuyumcu satış
                   double itemPrice =
                       widget.isWallet ? asset.buyPrice : asset.sellPrice;
 
@@ -840,12 +841,6 @@ class _PortfolioDetailState extends State<PortfolioDetail> {
                                                         : const Color(0xFFEF5350)),
                                                 fontSize: 13,
                                                 fontWeight: FontWeight.w500)),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                            "x ${formatNumber(qty)} adet",
-                                            style: TextStyle(
-                                                color: const Color(0x59FFFFFF),
-                                                fontSize: 11)),
                                       ])
                                 ]),
                               ),

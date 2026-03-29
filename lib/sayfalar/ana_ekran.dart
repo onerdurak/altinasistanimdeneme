@@ -136,7 +136,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                             color: Color(0xFF9E9E9E),
                                             letterSpacing: 1.2,
                                             fontSize: 12)),
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: 6),
                                     IconButton(
                                         padding: EdgeInsets.zero,
                                         constraints: const BoxConstraints(),
@@ -145,10 +145,10 @@ class _DashboardPageState extends State<DashboardPage> {
                                                 ? Icons.visibility_off
                                                 : Icons.visibility,
                                             color: Colors.grey,
-                                            size: 20),
-                                        onPressed: _toggleObscure)
+                                            size: 18),
+                                        onPressed: _toggleObscure),
                                   ]),
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 4),
                               Text(
                                   _isObscured
                                       ? "₺ ***"
@@ -160,7 +160,7 @@ class _DashboardPageState extends State<DashboardPage> {
                               const Divider(color: Colors.white10, height: 24),
                               Row(
                                   mainAxisAlignment:
-                                      MainAxisAlignment.spaceAround,
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     GestureDetector(
                                         behavior: HitTestBehavior.opaque,
@@ -192,9 +192,11 @@ class _DashboardPageState extends State<DashboardPage> {
                                   ])
                             ]))),
               Positioned(
-                  top: 15,
-                  right: 15,
+                  top: 10,
+                  right: 10,
                   child: IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                       icon: Icon(
                           widget.isAppLocked
                               ? Icons.lock
@@ -202,7 +204,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           color: widget.isAppLocked
                               ? AppTheme.neonRed
                               : AppTheme.goldMain,
-                          size: 24),
+                          size: 20),
                       onPressed: widget.onToggleLock))
             ]),
             const SizedBox(height: 20),
@@ -270,10 +272,10 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
     } else {
       setState(() {
         const defaultSlots = [
-          "gram22", "gram", "ceyrek", "yarim",
-          "eur", "usd", "tam", "resat",
-          "ons", "btc", "silver", "has",
-          "ata", "eth", "gbp", null,
+          "gram", "gram22", "usd", "ceyrek",
+          "ons", "btc", null, null,
+          null, null, null, null,
+          null, null, null, null,
         ];
         for (int j = 0; j < defaultSlots.length && j < 16; j++) {
           slots[j] = defaultSlots[j]; // son eleman null = boş kutucuk
@@ -328,7 +330,8 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
                           itemCount: widget.market.length,
                           itemBuilder: (c, i) {
                             var item = widget.market[i];
-                            // Fiyatı olmayan veya zaten ekli emtiaları gizle
+                            // Fiyatı olmayan, zaten ekli veya TL emtiaları gizle
+                            if (item.id == 'tl') return const SizedBox.shrink();
                             if (item.sellPrice <= 0 && !item.isDollarBase)
                               return const SizedBox.shrink();
                             if (slots.contains(item.id))
@@ -392,16 +395,8 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        if (isEditing)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 8),
-            child: Text("emtiaya basarak kaldırabilirsiniz",
-                style: TextStyle(color: Colors.white38, fontSize: 10)),
-          ),
-        GestureDetector(
-        onTap: () => setState(() => isEditing = false),
+    return GestureDetector(
+        onTap: () { if (isEditing) setState(() => isEditing = false); },
         child: GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -504,9 +499,7 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
                                   child: const Icon(Icons.remove,
                                       color: Colors.white, size: 16))))
                   ])));
-            })),
-      ],
-    );
+            }));
   }
 }
 

@@ -45,7 +45,7 @@ class PiyasaMotoru {
 
   PiyasaMotoru({required this.onUpdate});
 
-  void _recalcLiveValues() {
+  void recalcLiveValues() {
     _syncCustomAssets();
     // TL her zaman 1₺ = 1₺
     try {
@@ -69,11 +69,11 @@ class PiyasaMotoru {
     loadAllUserData().then((_) async {
       // 1. Önce cache'den hızlı aç (eski verilerle anında göster)
       await loadMarketCache();
-      _recalcLiveValues();
+      recalcLiveValues();
 
       // 2. Sonra 1 kez veri çek, matrix başlat
       await fetchLiveData();
-      _recalcLiveValues();
+      recalcLiveValues();
       _lastFetchTime = DateTime.now();
       // Sheets'ten geçmiş verileri çek, sonra boşlukları doldur
       _fetchHistoricalFromSheets().then((_) => fillHistoricalGaps());
@@ -104,32 +104,39 @@ class PiyasaMotoru {
     } catch (e) {}
   }
 
-  // Hareketli emtialar (her tick oynasın)
-  static const _alwaysTick = {'btc', 'eth', 'ons'};
+  // 7/24 aktif emtialar (hafta sonu da çalışır)
+  static const _weekendActive = {'btc', 'eth', 'ons'};
   // Sabit emtialar (asla oynamasın)
   static const _neverTick = {'tl'};
 
+  bool get _isWeekend {
+    final now = DateTime.now();
+    // Cumartesi veya Pazar (Pazar gecesi 00:00'dan itibaren açık)
+    return now.weekday == DateTime.saturday ||
+        (now.weekday == DateTime.sunday && now.hour < 0); // Pazar her zaman açık
+  }
+
   void _startTickerSimulation() {
     _simulationTimer?.cancel();
-    _simulationTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+    _simulationTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
       if (!isLiveConnection) return;
+
+      final isSaturday = DateTime.now().weekday == DateTime.saturday;
 
       for (var asset in market) {
         if (_neverTick.contains(asset.id)) continue;
         if (asset.baseSellPrice <= 0) continue;
 
-        // BTC/ETH/ONS her tick, diğerleri her 3 tick'te
-        bool shouldTick = _alwaysTick.contains(asset.id) ||
-            timer.tick % 3 == 0;
-        if (!shouldTick) continue;
+        // Cumartesi: sadece BTC/ETH/ONS çalışır, Pazar: hepsi çalışır
+        if (isSaturday && !_weekendActive.contains(asset.id)) continue;
 
-        double intensity = _alwaysTick.contains(asset.id) ? 0.0008 : 0.0003;
-        double maxDeviation = min(5.0, asset.baseSellPrice * 0.003);
-        double maxStep = asset.baseSellPrice * intensity;
+        // Tüm emtialar aynı anda, her tick hareket eder
+        double maxDev = min(10.0, asset.baseSellPrice * 0.005);
+        double maxStep = asset.baseSellPrice * 0.0012;
         double step = (_random.nextDouble() - 0.5) * 2.0 * maxStep;
         double newSell = (asset.sellPrice + step).clamp(
-            asset.baseSellPrice - maxDeviation,
-            asset.baseSellPrice + maxDeviation);
+            asset.baseSellPrice - maxDev,
+            asset.baseSellPrice + maxDev);
 
         double proportionalChange =
             (newSell - asset.baseSellPrice) / asset.baseSellPrice;
@@ -142,7 +149,7 @@ class PiyasaMotoru {
 
       _syncCustomAssets();
 
-      // Portfolio değerlerini her 3 tick'te 1 hesapla (15sn)
+      // Portfolio değerlerini her 3 tick'te 1 hesapla (6sn)
       if (timer.tick % 3 == 0) {
         liveWalletVal = wallet.getTotalValue(market);
         liveCreditVal =
@@ -661,6 +668,10 @@ class PiyasaMotoru {
           sellMarkup: 1.0964, buyMarkup: 1.0514),
       AssetType("ata", ["ATAALTIN"], "A", "Ata Altın", 0, 0, "gold",
           sellMarkup: 1.0934, buyMarkup: 1.0495),
+      AssetType("tl", [], "₺", "Türk Lirası", 1, 1, "currency",
+          manualInput: false,
+          sellMarkup: 1.000,
+          buyMarkup: 1.000),
       AssetType("yarim_gram22", [], "0.5", "0.5 Gram (22K)", 0, 0, "gold",
           manualInput: false, sellMarkup: 1.1134, buyMarkup: 1.0314),
       AssetType("ons", ["ONS"], "ONS", "Altın / ONS", 0, 0, "ons",
@@ -695,10 +706,6 @@ class PiyasaMotoru {
           sellMarkup: 1.000,
           buyMarkup: 1.000,
           isDollarBase: true),
-      AssetType("tl", [], "₺", "Türk Lirası", 1, 1, "currency",
-          manualInput: false,
-          sellMarkup: 1.000,
-          buyMarkup: 1.000),
     ];
   }
 
