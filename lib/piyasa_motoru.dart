@@ -106,8 +106,8 @@ class PiyasaMotoru {
 
   // 7/24 aktif emtialar (hafta sonu da çalışır)
   static const _weekendActive = {'btc', 'eth', 'ons'};
-  // Sabit emtialar (asla oynamasın)
-  static const _neverTick = {'tl'};
+  // Matrix'te hiç oynamayacak emtialar
+  static const _neverTick = {'tl', 'usd', 'eur', 'gbp'};
 
   // Her emtia için mevcut yön ve adım sayacı (yumuşak hareket)
   final Map<String, int> _direction = {}; // +1 veya -1
@@ -115,59 +115,59 @@ class PiyasaMotoru {
 
   void _startTickerSimulation() {
     _simulationTimer?.cancel();
-    _simulationTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+    _simulationTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
       if (!isLiveConnection) return;
 
-      final isSaturday = DateTime.now().weekday == DateTime.saturday;
+      final now = DateTime.now();
+      final isSaturday = now.weekday == DateTime.saturday;
+      // Pazar 20:00'den önce hafta sonu sayılır
+      final isSundayBeforeEvening =
+          now.weekday == DateTime.sunday && now.hour < 20;
 
       for (var asset in market) {
         if (_neverTick.contains(asset.id)) continue;
         if (asset.baseSellPrice <= 0) continue;
 
-        // Cumartesi: sadece BTC/ETH/ONS çalışır, Pazar: hepsi çalışır
-        if (isSaturday && !_weekendActive.contains(asset.id)) continue;
+        // Hafta sonu kuralı:
+        // Cumartesi + Pazar 20:00'e kadar: sadece BTC/ETH/ONS
+        // Pazar 20:00 sonrası: hepsi aktif
+        if ((isSaturday || isSundayBeforeEvening) &&
+            !_weekendActive.contains(asset.id)) continue;
 
         // Yön belirle: mevcut yönde adım kalmadıysa yeni yön seç
         if ((_stepsLeft[asset.id] ?? 0) <= 0) {
-          // Gerçek fiyattan uzaklaştıysa merkeze dönme eğilimi
           double drift = asset.sellPrice - asset.baseSellPrice;
           if (drift.abs() > 8) {
-            // 8₺'den fazla sapma varsa kesinlikle geri dön
             _direction[asset.id] = drift > 0 ? -1 : 1;
           } else if (drift.abs() > 4) {
-            // 4-8₺ arasında %70 geri dönme eğilimi
             _direction[asset.id] = (_random.nextDouble() < 0.7)
                 ? (drift > 0 ? -1 : 1)
                 : (drift > 0 ? 1 : -1);
           } else {
-            // Merkeze yakınsa rastgele yön
             _direction[asset.id] = _random.nextBool() ? 1 : -1;
           }
-          // 2-5 adım bu yönde devam et (sıralı hareket: +1, +2, +3...)
+          // 2-5 adım bu yönde devam et
           _stepsLeft[asset.id] = 2 + _random.nextInt(4);
         }
 
-        // Her tick'te 0.50₺ - 3.00₺ arası küçük adım (canlılık hissi)
-        double stepSize = 0.50 + _random.nextDouble() * 2.50;
-        double step = _direction[asset.id]! * stepSize;
+        double newSell;
 
-        // Toplam sapma max ±12₺
-        double newSell = asset.sellPrice + step;
-        newSell = newSell.clamp(
-            asset.baseSellPrice - 12.0,
-            asset.baseSellPrice + 12.0);
-
-        // Dolar bazlı emtialar için oransal adım (TL yerine % bazlı)
         if (asset.isDollarBase && asset.baseSellPrice > 0) {
+          // Dolar bazlı emtialar: % bazlı hareket, max ±0.4%
           double pctStep = _direction[asset.id]! *
-              (0.0002 + _random.nextDouble() * 0.0008);
-          double pctDrift =
-              (asset.sellPrice - asset.baseSellPrice) / asset.baseSellPrice;
+              (0.0001 + _random.nextDouble() * 0.0005);
           newSell = asset.sellPrice + asset.baseSellPrice * pctStep;
-          // Max ±0.5% sapma
           newSell = newSell.clamp(
-              asset.baseSellPrice * 0.995,
-              asset.baseSellPrice * 1.005);
+              asset.baseSellPrice * 0.996,
+              asset.baseSellPrice * 1.004);
+        } else {
+          // TL bazlı altın emtialar: 0.25₺ - 1.50₺ adım, max ±12₺
+          double stepSize = 0.25 + _random.nextDouble() * 1.25;
+          double step = _direction[asset.id]! * stepSize;
+          newSell = asset.sellPrice + step;
+          newSell = newSell.clamp(
+              asset.baseSellPrice - 12.0,
+              asset.baseSellPrice + 12.0);
         }
 
         _stepsLeft[asset.id] = (_stepsLeft[asset.id] ?? 1) - 1;
@@ -183,7 +183,7 @@ class PiyasaMotoru {
 
       _syncCustomAssets();
 
-      // Portfolio değerlerini her 3 tick'te 1 hesapla (6sn)
+      // Portfolio değerlerini her 3 tick'te 1 hesapla (12sn)
       if (timer.tick % 3 == 0) {
         liveWalletVal = wallet.getTotalValue(market);
         liveCreditVal =
