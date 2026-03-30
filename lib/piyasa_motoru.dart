@@ -112,89 +112,81 @@ class PiyasaMotoru {
   // Matrix'te hiç oynamayacak emtialar
   static const _neverTick = {'tl', 'usd', 'eur', 'gbp'};
 
-  // Her emtia için mevcut yön ve adım sayacı (yumuşak hareket)
-  final Map<String, int> _direction = {}; // +1 veya -1
-  final Map<String, int> _stepsLeft = {}; // kaç adım kaldı bu yönde
+  // Her emtia için yön ve kalan adım
+  final Map<String, int> _direction = {};
+  final Map<String, int> _stepsLeft = {};
+
+  // Matrix'e dahil olacak emtia id listesi (bir kez hesaplanır)
+  List<String>? _tickableIds;
 
   void _startTickerSimulation() {
     _simulationTimer?.cancel();
     _simulationTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (!isLiveConnection) return;
 
+      // İlk tick'te bir kez hesapla
+      _tickableIds ??= market
+          .where((a) =>
+              !_neverTick.contains(a.id) && a.baseSellPrice > 0)
+          .map((a) => a.id)
+          .toList();
+
       final now = DateTime.now();
-      final isSaturday = now.weekday == DateTime.saturday;
-      // Pazar 20:00'den önce hafta sonu sayılır
-      final isSundayBeforeEvening =
-          now.weekday == DateTime.sunday && now.hour < 20;
+      final isWeekendRestricted = now.weekday == DateTime.saturday ||
+          (now.weekday == DateTime.sunday && now.hour < 20);
 
-      for (var asset in market) {
-        if (_neverTick.contains(asset.id)) continue;
-        if (asset.baseSellPrice <= 0) continue;
+      // Her tick'te sadece 3 emtia seç (hafif)
+      final pool = isWeekendRestricted
+          ? _tickableIds!.where((id) => _weekendActive.contains(id)).toList()
+          : _tickableIds!;
+      if (pool.isEmpty) return;
 
-        // Hafta sonu kuralı:
-        // Cumartesi + Pazar 20:00'e kadar: sadece BTC/ETH/ONS
-        // Pazar 20:00 sonrası: hepsi aktif
-        if ((isSaturday || isSundayBeforeEvening) &&
-            !_weekendActive.contains(asset.id)) continue;
+      pool.shuffle(_random);
+      final selected = pool.take(min(3, pool.length));
 
-        // Yön belirle: mevcut yönde adım kalmadıysa yeni yön seç
-        if ((_stepsLeft[asset.id] ?? 0) <= 0) {
+      for (var id in selected) {
+        final asset = market.firstWhere((a) => a.id == id);
+
+        if ((_stepsLeft[id] ?? 0) <= 0) {
           double drift = asset.sellPrice - asset.baseSellPrice;
           if (drift.abs() > 8) {
-            _direction[asset.id] = drift > 0 ? -1 : 1;
+            _direction[id] = drift > 0 ? -1 : 1;
           } else if (drift.abs() > 4) {
-            _direction[asset.id] = (_random.nextDouble() < 0.7)
+            _direction[id] = (_random.nextDouble() < 0.7)
                 ? (drift > 0 ? -1 : 1)
                 : (drift > 0 ? 1 : -1);
           } else {
-            _direction[asset.id] = _random.nextBool() ? 1 : -1;
+            _direction[id] = _random.nextBool() ? 1 : -1;
           }
-          // 2-5 adım bu yönde devam et
-          _stepsLeft[asset.id] = 2 + _random.nextInt(4);
+          _stepsLeft[id] = 2 + _random.nextInt(4);
         }
 
         double newSell;
-
         if (asset.isDollarBase && asset.baseSellPrice > 0) {
-          // Dolar bazlı emtialar: % bazlı hareket, max ±0.4%
-          double pctStep = _direction[asset.id]! *
+          double pctStep = _direction[id]! *
               (0.0001 + _random.nextDouble() * 0.0005);
           newSell = asset.sellPrice + asset.baseSellPrice * pctStep;
           newSell = newSell.clamp(
-              asset.baseSellPrice * 0.996,
-              asset.baseSellPrice * 1.004);
+              asset.baseSellPrice * 0.996, asset.baseSellPrice * 1.004);
         } else {
-          // TL bazlı altın emtialar: 0.25₺ - 1.50₺ adım, max ±12₺
           double stepSize = 0.25 + _random.nextDouble() * 1.25;
-          double step = _direction[asset.id]! * stepSize;
-          newSell = asset.sellPrice + step;
+          newSell = asset.sellPrice + _direction[id]! * stepSize;
           newSell = newSell.clamp(
-              asset.baseSellPrice - 12.0,
-              asset.baseSellPrice + 12.0);
+              asset.baseSellPrice - 12.0, asset.baseSellPrice + 12.0);
         }
 
-        _stepsLeft[asset.id] = (_stepsLeft[asset.id] ?? 1) - 1;
+        _stepsLeft[id] = (_stepsLeft[id] ?? 1) - 1;
 
-        double proportionalChange =
+        double pChange =
             (newSell - asset.baseSellPrice) / asset.baseSellPrice;
         asset.sellPrice = newSell;
-        asset.buyPrice = asset.baseBuyPrice * (1 + proportionalChange);
+        asset.buyPrice = asset.baseBuyPrice * (1 + pChange);
         if (asset.isDollarBase && asset.baseUsdPrice > 0) {
-          asset.usdPrice = asset.baseUsdPrice * (1 + proportionalChange);
+          asset.usdPrice = asset.baseUsdPrice * (1 + pChange);
         }
       }
 
       _syncCustomAssets();
-
-      // Portfolio değerlerini her 3 tick'te 1 hesapla (12sn)
-      if (timer.tick % 3 == 0) {
-        liveWalletVal = wallet.getTotalValue(market);
-        liveCreditVal =
-            credits.fold(0, (sum, i) => sum + i.getTotalValue(market));
-        liveDebtVal = debts.fold(0, (sum, i) => sum + i.getTotalValue(market));
-        liveNetWorth = liveWalletVal + liveCreditVal - liveDebtVal;
-      }
-
       onUpdate();
     });
   }
