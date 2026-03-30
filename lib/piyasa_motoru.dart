@@ -45,7 +45,10 @@ class PiyasaMotoru {
 
   PiyasaMotoru({required this.onUpdate});
 
-  void recalcLiveValues() {
+  /// Portföy değerlerini yeniden hesaplar.
+  /// [notify] true ise onUpdate() çağırır (UI güncellenir).
+  /// Manuel setState yapan yerlerden notify: false ile çağır.
+  void recalcLiveValues({bool notify = false}) {
     _syncCustomAssets();
     // TL her zaman 1₺ = 1₺
     try {
@@ -60,7 +63,7 @@ class PiyasaMotoru {
         credits.fold(0, (sum, i) => sum + i.getTotalValue(market));
     liveDebtVal = debts.fold(0, (sum, i) => sum + i.getTotalValue(market));
     liveNetWorth = liveWalletVal + liveCreditVal - liveDebtVal;
-    onUpdate();
+    if (notify) onUpdate();
   }
 
   void baslat() {
@@ -69,11 +72,11 @@ class PiyasaMotoru {
     loadAllUserData().then((_) async {
       // 1. Önce cache'den hızlı aç (eski verilerle anında göster)
       await loadMarketCache();
-      recalcLiveValues();
+      recalcLiveValues(notify: true);
 
       // 2. Sonra 1 kez veri çek, matrix başlat
       await fetchLiveData();
-      recalcLiveValues();
+      recalcLiveValues(notify: true);
       _lastFetchTime = DateTime.now();
       // Sheets'ten geçmiş verileri çek, sonra boşlukları doldur
       _fetchHistoricalFromSheets().then((_) => fillHistoricalGaps());
@@ -115,7 +118,7 @@ class PiyasaMotoru {
 
   void _startTickerSimulation() {
     _simulationTimer?.cancel();
-    _simulationTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+    _simulationTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (!isLiveConnection) return;
 
       final now = DateTime.now();

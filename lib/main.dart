@@ -203,11 +203,11 @@ class _MainLayoutState extends State<MainLayout> {
                 isCredit: isCredit,
                 market: _motor.market,
                 onSave: (item) {
-                  setState(() => isCredit
+                  isCredit
                       ? _motor.credits.add(item)
-                      : _motor.debts.add(item));
+                      : _motor.debts.add(item);
                   _motor.saveAllUserData();
-                  _motor.recalcLiveValues();
+                  _motor.recalcLiveValues(notify: true);
                 })));
   }
 
@@ -220,15 +220,14 @@ class _MainLayoutState extends State<MainLayout> {
                     market: _motor.market,
                     isWallet: item.id == "me",
                     onUpdate: () {
-                      setState(() {});
                       _motor.saveAllUserData();
-                      _motor.recalcLiveValues();
+                      _motor.recalcLiveValues(notify: true);
                     },
                     onRefresh: () async =>
                         await _motor.fetchLiveData(silent: false),
                     onAssetTap: (asset) => _showAssetDetail(context, asset))))
         .then((_) {
-      _motor.recalcLiveValues();
+      _motor.recalcLiveValues(notify: true);
     });
   }
 
@@ -250,15 +249,13 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   void _deletePortfolioItem(PortfolioItem item, bool isCredit) {
-    setState(() {
-      if (isCredit) {
-        _motor.credits.remove(item);
-      } else {
-        _motor.debts.remove(item);
-      }
-    });
+    if (isCredit) {
+      _motor.credits.remove(item);
+    } else {
+      _motor.debts.remove(item);
+    }
     _motor.saveAllUserData();
-    _motor.recalcLiveValues();
+    _motor.recalcLiveValues(notify: true);
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text("Kayıt silindi"), duration: Duration(seconds: 1)));
   }
@@ -434,9 +431,8 @@ class _MainLayoutState extends State<MainLayout> {
           market: _motor.market,
           isWallet: true,
           onUpdate: () {
-            setState(() {});
             _motor.saveAllUserData();
-            _motor.recalcLiveValues();
+            _motor.recalcLiveValues(notify: true);
           },
           onRefresh: () async => await _motor.fetchLiveData(silent: false),
           onAssetTap: (asset) => _showAssetDetail(context, asset))
