@@ -20,7 +20,6 @@ class FullMarketPage extends StatefulWidget {
 }
 
 class _FullMarketPageState extends State<FullMarketPage> {
-
   @override
   Widget build(BuildContext context) {
     final fmtGold =
@@ -31,23 +30,11 @@ class _FullMarketPageState extends State<FullMarketPage> {
     return Scaffold(
         appBar: AppBar(title: const Text("TÜM PİYASA")),
         body: ReorderableListView.builder(
+            buildDefaultDragHandles: false,
             padding: const EdgeInsets.all(16),
             physics: const BouncingScrollPhysics(),
             itemCount: widget.market.length,
             onReorder: widget.onReorder,
-            proxyDecorator: (child, index, animation) {
-              return AnimatedBuilder(
-                animation: animation,
-                builder: (context, child) => Material(
-                  color: Colors.transparent,
-                  elevation: 4,
-                  shadowColor: Colors.black54,
-                  borderRadius: BorderRadius.circular(16),
-                  child: child,
-                ),
-                child: child,
-              );
-            },
             itemBuilder: (c, i) {
               var item = widget.market[i];
               String priceStr;
