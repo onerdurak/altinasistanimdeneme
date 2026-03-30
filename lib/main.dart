@@ -109,7 +109,15 @@ class _MainLayoutState extends State<MainLayout> {
     super.initState();
     _loadAuthData();
 
-    _motor = PiyasaMotoru(onUpdate: _scheduleUpdate);
+    _motor = PiyasaMotoru(onUpdate: () {
+      if (mounted && !_isPageAnimating && !_updateScheduled) {
+        _updateScheduled = true;
+        Future.microtask(() {
+          if (mounted) setState(() {});
+          _updateScheduled = false;
+        });
+      }
+    });
     _motor.baslat();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -117,31 +125,10 @@ class _MainLayoutState extends State<MainLayout> {
     });
   }
 
-  void _scheduleUpdate() {
-    if (!mounted || _isPageAnimating || _updateScheduled) return;
-    _updateScheduled = true;
-    Future.microtask(() {
-      if (mounted && !_isPageAnimating) setState(() {});
-      _updateScheduled = false;
-    });
-  }
-
-  bool _wasAnimating = false;
-
   void _onPageScroll() {
     if (!_pageController.hasClients) return;
     double page = _pageController.page ?? 0;
-    bool animating = (page - page.roundToDouble()).abs() > 0.01;
-    _isPageAnimating = animating;
-
-    // Animasyon bittiğinde tek bir rebuild yap
-    if (_wasAnimating && !animating) {
-      _updateScheduled = false; // reset
-      Future.microtask(() {
-        if (mounted) setState(() {});
-      });
-    }
-    _wasAnimating = animating;
+    _isPageAnimating = (page - page.roundToDouble()).abs() > 0.01;
   }
 
   @override

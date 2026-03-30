@@ -107,82 +107,36 @@ class PiyasaMotoru {
     } catch (e) {}
   }
 
-  // 7/24 aktif emtialar (hafta sonu da çalışır)
-  static const _weekendActive = {'btc', 'eth', 'ons'};
-  // Matrix'te hiç oynamayacak emtialar
+  // Sabit emtialar
   static const _neverTick = {'tl', 'usd', 'eur', 'gbp'};
-
-  // Her emtia için yön ve kalan adım
-  final Map<String, int> _direction = {};
-  final Map<String, int> _stepsLeft = {};
-
-  // Matrix'e dahil olacak emtia id listesi (bir kez hesaplanır)
-  List<String>? _tickableIds;
+  // Hafta sonu da çalışanlar
+  static const _weekendActive = {'btc', 'eth', 'ons'};
 
   void _startTickerSimulation() {
     _simulationTimer?.cancel();
     _simulationTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (!isLiveConnection) return;
 
-      // İlk tick'te bir kez hesapla
-      _tickableIds ??= market
-          .where((a) =>
-              !_neverTick.contains(a.id) && a.baseSellPrice > 0)
-          .map((a) => a.id)
-          .toList();
-
       final now = DateTime.now();
-      final isWeekendRestricted = now.weekday == DateTime.saturday ||
+      final weekendRestricted = now.weekday == DateTime.saturday ||
           (now.weekday == DateTime.sunday && now.hour < 20);
 
-      // Her tick'te sadece 3 emtia seç (hafif)
-      final pool = isWeekendRestricted
-          ? _tickableIds!.where((id) => _weekendActive.contains(id)).toList()
-          : _tickableIds!;
-      if (pool.isEmpty) return;
+      for (var asset in market) {
+        if (_neverTick.contains(asset.id)) continue;
+        if (asset.baseSellPrice <= 0) continue;
+        if (weekendRestricted && !_weekendActive.contains(asset.id)) continue;
 
-      pool.shuffle(_random);
-      final selected = pool.take(min(3, pool.length));
+        double maxStep = asset.baseSellPrice * 0.0003;
+        double step = (_random.nextDouble() - 0.5) * 2.0 * maxStep;
+        double maxDev = min(10.0, asset.baseSellPrice * 0.003);
+        double newSell = (asset.sellPrice + step).clamp(
+            asset.baseSellPrice - maxDev, asset.baseSellPrice + maxDev);
 
-      for (var id in selected) {
-        final asset = market.firstWhere((a) => a.id == id);
-
-        if ((_stepsLeft[id] ?? 0) <= 0) {
-          double drift = asset.sellPrice - asset.baseSellPrice;
-          if (drift.abs() > 8) {
-            _direction[id] = drift > 0 ? -1 : 1;
-          } else if (drift.abs() > 4) {
-            _direction[id] = (_random.nextDouble() < 0.7)
-                ? (drift > 0 ? -1 : 1)
-                : (drift > 0 ? 1 : -1);
-          } else {
-            _direction[id] = _random.nextBool() ? 1 : -1;
-          }
-          _stepsLeft[id] = 2 + _random.nextInt(4);
-        }
-
-        double newSell;
-        if (asset.isDollarBase && asset.baseSellPrice > 0) {
-          double pctStep = _direction[id]! *
-              (0.0001 + _random.nextDouble() * 0.0005);
-          newSell = asset.sellPrice + asset.baseSellPrice * pctStep;
-          newSell = newSell.clamp(
-              asset.baseSellPrice * 0.996, asset.baseSellPrice * 1.004);
-        } else {
-          double stepSize = 0.25 + _random.nextDouble() * 1.25;
-          newSell = asset.sellPrice + _direction[id]! * stepSize;
-          newSell = newSell.clamp(
-              asset.baseSellPrice - 12.0, asset.baseSellPrice + 12.0);
-        }
-
-        _stepsLeft[id] = (_stepsLeft[id] ?? 1) - 1;
-
-        double pChange =
-            (newSell - asset.baseSellPrice) / asset.baseSellPrice;
+        double r = (newSell - asset.baseSellPrice) / asset.baseSellPrice;
         asset.sellPrice = newSell;
-        asset.buyPrice = asset.baseBuyPrice * (1 + pChange);
+        asset.buyPrice = asset.baseBuyPrice * (1 + r);
         if (asset.isDollarBase && asset.baseUsdPrice > 0) {
-          asset.usdPrice = asset.baseUsdPrice * (1 + pChange);
+          asset.usdPrice = asset.baseUsdPrice * (1 + r);
         }
       }
 
