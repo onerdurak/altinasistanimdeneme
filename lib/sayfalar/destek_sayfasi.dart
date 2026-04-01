@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../modeller.dart';
-import 'guvenlik_sayfalari.dart';
 
 class SupportDeveloperPage extends StatefulWidget {
   const SupportDeveloperPage({super.key});
@@ -253,11 +253,8 @@ class _SupportDeveloperPageState extends State<SupportDeveloperPage> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           GestureDetector(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) => const FullDisclaimerPage()),
-                            ),
+                            onTap: () => launchUrl(Uri.parse(
+                                'https://onerdurak.github.io/altin-asistanim-privacy/privacy-policy.html#terms')),
                             child: const Text(
                               "Kullanım Koşulları",
                               style: TextStyle(
@@ -271,11 +268,8 @@ class _SupportDeveloperPageState extends State<SupportDeveloperPage> {
                               style: TextStyle(
                                   color: Colors.white38, fontSize: 12)),
                           GestureDetector(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) => const FullDisclaimerPage()),
-                            ),
+                            onTap: () => launchUrl(Uri.parse(
+                                'https://onerdurak.github.io/altin-asistanim-privacy/privacy-policy.html')),
                             child: const Text(
                               "Gizlilik Politikası",
                               style: TextStyle(
