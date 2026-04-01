@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import '../modeller.dart';
+import 'guvenlik_sayfalari.dart';
 
 class SupportDeveloperPage extends StatefulWidget {
   const SupportDeveloperPage({super.key});
@@ -245,7 +246,48 @@ class _SupportDeveloperPageState extends State<SupportDeveloperPage> {
                             ],
                           ),
                         ),
-                      )
+                      ),
+                      const SizedBox(height: 24),
+                      // Apple Guideline 3.1.2(c) — abonelik ekranında zorunlu linkler
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const FullDisclaimerPage()),
+                            ),
+                            child: const Text(
+                              "Kullanım Koşulları",
+                              style: TextStyle(
+                                  color: AppTheme.goldMain,
+                                  fontSize: 12,
+                                  decoration: TextDecoration.underline,
+                                  decorationColor: AppTheme.goldMain),
+                            ),
+                          ),
+                          const Text("  •  ",
+                              style: TextStyle(
+                                  color: Colors.white38, fontSize: 12)),
+                          GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const FullDisclaimerPage()),
+                            ),
+                            child: const Text(
+                              "Gizlilik Politikası",
+                              style: TextStyle(
+                                  color: AppTheme.goldMain,
+                                  fontSize: 12,
+                                  decoration: TextDecoration.underline,
+                                  decorationColor: AppTheme.goldMain),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
                     ]
                   ],
                 ),
