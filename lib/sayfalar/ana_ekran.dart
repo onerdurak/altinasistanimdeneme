@@ -273,6 +273,53 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
   static final _cryptoFmt =
       NumberFormat.currency(locale: "en_US", symbol: "\$", decimalDigits: 0);
 
+  // --- Fiyat yönü takibi ---
+  final Map<String, double> _prevPrices = {};
+  final Map<String, int> _directions = {}; // 1=yukarı, -1=aşağı, 0=sabit
+  final Map<String, Timer> _resetTimers = {};
+
+  @override
+  void didUpdateWidget(QuickAccessGrid oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    for (final asset in widget.market) {
+      final prev = _prevPrices[asset.id] ?? 0.0;
+      final curr = asset.sellPrice;
+      if (prev > 0 && curr > 0 && (curr - prev).abs() > prev * 0.000001) {
+        final dir = curr > prev ? 1 : -1;
+        if (_directions[asset.id] != dir) {
+          setState(() => _directions[asset.id] = dir);
+          _resetTimers[asset.id]?.cancel();
+          _resetTimers[asset.id] = Timer(const Duration(seconds: 4), () {
+            if (mounted) setState(() => _directions.remove(asset.id));
+          });
+        }
+      }
+      _prevPrices[asset.id] = curr;
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final t in _resetTimers.values) {
+      t.cancel();
+    }
+    super.dispose();
+  }
+
+  /// Border rengi: yukarı=yeşil, aşağı=kırmızı, sabit=altın sarısı
+  Color _tileBorderColor(int dir) {
+    if (dir > 0) return AppTheme.neonGreen.withOpacity(0.75);
+    if (dir < 0) return AppTheme.neonRed.withOpacity(0.75);
+    return const Color(0x26FFD700);
+  }
+
+  /// Glow rengi: yukarı=yeşil, aşağı=kırmızı, sabit=altın sarısı
+  Color _tileGlowColor(int dir) {
+    if (dir > 0) return AppTheme.neonGreen.withOpacity(0.20);
+    if (dir < 0) return AppTheme.neonRed.withOpacity(0.20);
+    return const Color(0x0FFFD700);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -296,7 +343,7 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
           null, null, null, null,
         ];
         for (int j = 0; j < defaultSlots.length && j < 16; j++) {
-          slots[j] = defaultSlots[j]; // son eleman null = boş kutucuk
+          slots[j] = defaultSlots[j];
         }
       });
     }
@@ -316,8 +363,7 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
     if (slots[index] == null) {
       showModalBottomSheet(
           context: context,
-          backgroundColor: Colors
-              .transparent, // Arkaplanı şeffaf yapıyoruz ki Radius gözükssün
+          backgroundColor: Colors.transparent,
           isScrollControlled: true,
           builder: (c) => Container(
                 height: MediaQuery.of(context).size.height * 0.7,
@@ -348,7 +394,6 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
                           itemCount: widget.market.length,
                           itemBuilder: (c, i) {
                             var item = widget.market[i];
-                            // Fiyatı olmayan, zaten ekli veya TL emtiaları gizle
                             if (item.id == 'tl') return const SizedBox.shrink();
                             if (item.sellPrice <= 0 && !item.isDollarBase)
                               return const SizedBox.shrink();
@@ -415,7 +460,9 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
   Widget build(BuildContext context) {
     final marketMap = {for (var a in widget.market) a.id: a};
     return GestureDetector(
-        onTap: () { if (isEditing) setState(() => isEditing = false); },
+        onTap: () {
+          if (isEditing) setState(() => isEditing = false);
+        },
         child: GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -429,26 +476,31 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
               String? assetId = slots[i];
               AssetType? asset = assetId != null ? marketMap[assetId] : null;
               bool isDollar = asset?.isDollarBase ?? false;
+              final int dir =
+                  (assetId != null ? _directions[assetId] : null) ?? 0;
 
               return RepaintBoundary(
                 child: GestureDetector(
                   onTap: () => _onSlotTap(i),
                   onLongPress: () => _onLongPress(i),
                   child: Stack(clipBehavior: Clip.none, children: [
-                    Container(
+                    // AnimatedContainer: fiyat yönüne göre border ve glow rengi değişir
+                    AnimatedContainer(
+                        duration: const Duration(milliseconds: 500),
+                        curve: Curves.easeInOut,
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         decoration: BoxDecoration(
                             color: AppTheme.card,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                                color: const Color(0x26FFD700),
-                                width: 1),
-                            boxShadow: const [
+                                color: _tileBorderColor(dir),
+                                width: dir != 0 ? 1.5 : 1.0),
+                            boxShadow: [
                               BoxShadow(
-                                  color: Color(0x0FFFD700),
-                                  blurRadius: 8,
-                                  spreadRadius: 1,
-                                  offset: Offset(0, 2)),
+                                  color: _tileGlowColor(dir),
+                                  blurRadius: dir != 0 ? 14 : 8,
+                                  spreadRadius: dir != 0 ? 2 : 1,
+                                  offset: const Offset(0, 2)),
                             ]),
                         child: assetId == null
                             ? const Center(
@@ -514,7 +566,9 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
                                       shape: BoxShape.circle),
                                   child: const Icon(Icons.remove,
                                       color: Colors.white, size: 16))))
-                  ])));
+                  ]),
+                ),
+              );
             }));
   }
 }
@@ -554,8 +608,7 @@ class _HistoryChartPageState extends State<HistoryChartPage> {
 
     return Scaffold(
         appBar: AppBar(
-            title: Text(widget.title,
-                style: TextStyle(color: widget.color))),
+            title: Text(widget.title, style: TextStyle(color: widget.color))),
         body: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.all(20),
@@ -580,8 +633,8 @@ class _HistoryChartPageState extends State<HistoryChartPage> {
                   setState(() => _showHistory = !_showHistory);
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
                       color: AppTheme.card,
                       borderRadius: BorderRadius.circular(12),
@@ -626,10 +679,9 @@ class _HistoryChartPageState extends State<HistoryChartPage> {
                             "${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}";
                       } catch (e) {}
 
-                      // dataKey'e göre ilgili bölümün emtia notunu al
                       String noteKey = '${widget.dataKey}_note';
-                      String note = (entry[noteKey] ?? entry['note'] ?? '')
-                          .toString();
+                      String note =
+                          (entry[noteKey] ?? entry['note'] ?? '').toString();
 
                       return Container(
                           margin: const EdgeInsets.only(bottom: 8),
@@ -662,8 +714,7 @@ class _HistoryChartPageState extends State<HistoryChartPage> {
                                                 fontSize: 14)),
                                       ]),
                                       Text(
-                                          currency
-                                              .format(entry[widget.dataKey]),
+                                          currency.format(entry[widget.dataKey]),
                                           style: const TextStyle(
                                               color: Colors.white,
                                               fontWeight: FontWeight.bold,
