@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -18,13 +19,56 @@ class _SupportDeveloperPageState extends State<SupportDeveloperPage> {
   bool _isAvailable = false;
   bool _isLoading = true;
 
-  // Yeni ID'miz 'aylik20plan' sisteme eklendi
-  final Set<String> _kIds = {
+  // Platform bazlı product ID'ler
+  // Google Play: destek_100, destek_200, destek_500, destek_1000, aylik20plan
+  // App Store: bronz_destek, gumus_destek, altin_destek, platin_destek, aylik_destek
+  static final Set<String> _googleIds = {
     'destek_100',
     'destek_200',
     'destek_500',
     'destek_1000',
-    'aylik20plan'
+    'aylik20plan',
+  };
+
+  static final Set<String> _appleIds = {
+    'bronz_destek',
+    'gumus_destek',
+    'altin_destek',
+    'platin_destek',
+    'aylik_destek',
+  };
+
+  Set<String> get _kIds => Platform.isIOS ? _appleIds : _googleIds;
+
+  // Abonelik ID'si platforma göre
+  String get _subscriptionId => Platform.isIOS ? 'aylik_destek' : 'aylik20plan';
+
+  // Ürün isim eşleştirmesi (her iki platform için)
+  static const Map<String, String> _tierNames = {
+    'destek_100': 'Bronz Destek',
+    'destek_200': 'Gümüş Destek',
+    'destek_500': 'Altın Destek',
+    'destek_1000': 'Platin Destek',
+    'bronz_destek': 'Bronz Destek',
+    'gumus_destek': 'Gümüş Destek',
+    'altin_destek': 'Altın Destek',
+    'platin_destek': 'Platin Destek',
+  };
+
+  // Tier ikonları
+  static const Map<String, IconData> _tierIcons = {
+    'Bronz Destek': Icons.workspace_premium,
+    'Gümüş Destek': Icons.workspace_premium,
+    'Altın Destek': Icons.workspace_premium,
+    'Platin Destek': Icons.diamond,
+  };
+
+  // Tier renkleri
+  static const Map<String, Color> _tierColors = {
+    'Bronz Destek': Color(0xFFCD7F32),
+    'Gümüş Destek': Color(0xFFC0C0C0),
+    'Altın Destek': Color(0xFFFFD700),
+    'Platin Destek': Color(0xFFE5E4E2),
   };
 
   @override
@@ -95,7 +139,7 @@ class _SupportDeveloperPageState extends State<SupportDeveloperPage> {
     final PurchaseParam purchaseParam = PurchaseParam(productDetails: product);
 
     // Ürün abonelikse buyNonConsumable!
-    if (product.id == 'aylik20plan') {
+    if (product.id == _subscriptionId) {
       _inAppPurchase.buyNonConsumable(purchaseParam: purchaseParam);
     } else {
       // Tek seferlik destek
@@ -119,10 +163,11 @@ class _SupportDeveloperPageState extends State<SupportDeveloperPage> {
   Widget build(BuildContext context) {
     // Ürünleri listelemek için ayırıyoruz
     List<ProductDetails> oneTimeProducts =
-        _products.where((p) => p.id != 'aylik20plan').toList();
+        _products.where((p) => p.id != _subscriptionId).toList();
     ProductDetails? subscriptionProduct;
     try {
-      subscriptionProduct = _products.firstWhere((p) => p.id == 'aylik20plan');
+      subscriptionProduct =
+          _products.firstWhere((p) => p.id == _subscriptionId);
     } catch (e) {
       subscriptionProduct = null;
     }
@@ -152,30 +197,36 @@ class _SupportDeveloperPageState extends State<SupportDeveloperPage> {
                     ),
                     const SizedBox(height: 30),
 
-                    // --- TEK SEFERLİK ÜRÜNLER ---
+                    // --- TEK SEFERLİK ÜRÜNLER (Bronz/Gümüş/Altın/Platin) ---
                     ...oneTimeProducts.map((product) {
+                      final tierName =
+                          _tierNames[product.id] ?? product.title;
+                      final tierColor =
+                          _tierColors[tierName] ?? AppTheme.goldMain;
+                      final tierIcon =
+                          _tierIcons[tierName] ?? Icons.workspace_premium;
+
                       return Container(
                         margin: const EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
                             color: AppTheme.card,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.white10)),
+                            border: Border.all(
+                                color: tierColor.withOpacity(0.3))),
                         child: ListTile(
                           contentPadding: const EdgeInsets.symmetric(
                               horizontal: 20, vertical: 4),
-                          title: Text(
-                              product.title
-                                  .replaceAll('(Altın Asistanım)', '')
-                                  .trim(),
-                              style: const TextStyle(
+                          leading: Icon(tierIcon, color: tierColor, size: 28),
+                          title: Text(tierName,
+                              style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.white)),
+                                  color: tierColor)),
                           subtitle: const Text("Tek Seferlik",
                               style:
                                   TextStyle(color: Colors.grey, fontSize: 11)),
                           trailing: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.goldMain,
+                                backgroundColor: tierColor,
                                 foregroundColor: Colors.black,
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10))),
