@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 
@@ -25,6 +26,45 @@ class _FullMarketPageState extends State<FullMarketPage> {
   static final _fmtCurrency =
       NumberFormat.currency(locale: "tr_TR", symbol: "₺", decimalDigits: 2);
 
+  // Fiyat yönü takibi
+  final Map<String, double> _prevPrices = {};
+  final Map<String, int> _directions = {};
+  final Map<String, Timer> _resetTimers = {};
+
+  @override
+  void didUpdateWidget(FullMarketPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    for (final item in widget.market) {
+      final prev = _prevPrices[item.id] ?? 0.0;
+      final curr = item.sellPrice;
+      if (prev > 0 && curr > 0 && (curr - prev).abs() > prev * 0.000001) {
+        final dir = curr > prev ? 1 : -1;
+        if (_directions[item.id] != dir) {
+          setState(() => _directions[item.id] = dir);
+          _resetTimers[item.id]?.cancel();
+          _resetTimers[item.id] = Timer(const Duration(seconds: 2), () {
+            if (mounted) setState(() => _directions.remove(item.id));
+          });
+        }
+      }
+      _prevPrices[item.id] = curr;
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final t in _resetTimers.values) {
+      t.cancel();
+    }
+    super.dispose();
+  }
+
+  Color _priceColor(int dir) {
+    if (dir > 0) return AppTheme.neonGreen;
+    if (dir < 0) return AppTheme.neonRed;
+    return AppTheme.goldMain;
+  }
+
   @override
   Widget build(BuildContext context) {
 
@@ -38,6 +78,7 @@ class _FullMarketPageState extends State<FullMarketPage> {
             onReorder: widget.onReorder,
             itemBuilder: (c, i) {
               var item = widget.market[i];
+              final int dir = _directions[item.id] ?? 0;
               String priceStr;
               String buyStr;
 
@@ -105,11 +146,13 @@ class _FullMarketPageState extends State<FullMarketPage> {
                       Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text(priceStr,
-                                style: const TextStyle(
-                                    color: AppTheme.goldMain,
+                            AnimatedDefaultTextStyle(
+                                duration: const Duration(milliseconds: 300),
+                                style: TextStyle(
+                                    color: _priceColor(dir),
                                     fontWeight: FontWeight.w900,
-                                    fontSize: 15)),
+                                    fontSize: 15),
+                                child: Text(priceStr)),
                             const SizedBox(height: 2),
                             Text("Alış: $buyStr",
                                 style: const TextStyle(
