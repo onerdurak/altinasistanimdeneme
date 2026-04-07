@@ -103,6 +103,18 @@ class _SupportDeveloperPageState extends State<SupportDeveloperPage> {
     }
   }
 
+  Future<void> _restorePurchases() async {
+    try {
+      await _inAppPurchase.restorePurchases();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text("Geri yükleme sırasında bir hata oluştu."),
+            backgroundColor: AppTheme.neonRed));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Ürünleri listelemek için ayırıyoruz
@@ -281,8 +293,36 @@ class _SupportDeveloperPageState extends State<SupportDeveloperPage> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 12),
+                      // Abonelik bilgilendirme metni (Apple Guideline 3.1.2(c))
+                      Text(
+                        "Abonelik her ay otomatik olarak yenilenir. "
+                        "Aboneliğinizi istediğiniz zaman Ayarlar > Apple Kimliği > Abonelikler bölümünden iptal edebilirsiniz. "
+                        "İptal işlemi mevcut dönemin sonunda geçerli olur.",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            color: Colors.white38, fontSize: 11, height: 1.4),
+                      ),
                       const SizedBox(height: 8),
-                    ]
+                    ],
+
+                    const SizedBox(height: 24),
+                    // Satın Alımları Geri Yükle butonu (Apple Guideline 3.1.1)
+                    Center(
+                      child: TextButton.icon(
+                        onPressed: _restorePurchases,
+                        icon: const Icon(Icons.restore, color: AppTheme.goldMain, size: 20),
+                        label: const Text(
+                          "Satın Alımları Geri Yükle",
+                          style: TextStyle(
+                              color: AppTheme.goldMain,
+                              fontSize: 13,
+                              decoration: TextDecoration.underline,
+                              decorationColor: AppTheme.goldMain),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                   ],
                 ),
     );
