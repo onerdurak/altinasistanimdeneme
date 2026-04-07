@@ -10,6 +10,17 @@ import 'modeller.dart';
 class PiyasaMotoru {
   final Function onUpdate;
 
+  // Ek dinleyiciler (detay sayfası vb.)
+  final List<VoidCallback> _extraListeners = [];
+  void addListener(VoidCallback cb) => _extraListeners.add(cb);
+  void removeListener(VoidCallback cb) => _extraListeners.remove(cb);
+  void _notifyAll() {
+    onUpdate();
+    for (final cb in List.of(_extraListeners)) {
+      cb();
+    }
+  }
+
   List<AssetType> market = [];
   bool isLoading = true;
   bool isPrimaryEngineActive = false;
@@ -116,7 +127,7 @@ class PiyasaMotoru {
 
   void _startTickerSimulation() {
     _simulationTimer?.cancel();
-    _simulationTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+    _simulationTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!isLiveConnection) return;
 
       final now = DateTime.now();
@@ -128,9 +139,9 @@ class PiyasaMotoru {
         if (asset.baseSellPrice <= 0) continue;
         if (weekendRestricted && !_weekendActive.contains(asset.id)) continue;
 
-        double maxStep = asset.baseSellPrice * 0.0003;
+        double maxStep = asset.baseSellPrice * 0.0002;
         double step = (_random.nextDouble() - 0.5) * 2.0 * maxStep;
-        double maxDev = min(10.0, asset.baseSellPrice * 0.003);
+        double maxDev = min(10.0, asset.baseSellPrice * 0.002);
         double newSell = (asset.sellPrice + step).clamp(
             asset.baseSellPrice - maxDev, asset.baseSellPrice + maxDev);
 
@@ -143,7 +154,7 @@ class PiyasaMotoru {
       }
 
       _syncCustomAssets();
-      onUpdate();
+      _notifyAll();
     });
   }
 

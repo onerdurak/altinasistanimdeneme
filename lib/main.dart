@@ -190,7 +190,8 @@ class _MainLayoutState extends State<MainLayout> {
         builder: (c) => FullScreenAssetPage(
             asset: asset,
             history: _motor.assetHistory,
-            intraDayHistory: _motor.intraDayHistory));
+            intraDayHistory: _motor.intraDayHistory,
+            motor: _motor));
   }
 
   void _openCreator(bool isCredit) {

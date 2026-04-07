@@ -289,7 +289,7 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
         if (_directions[asset.id] != dir) {
           setState(() => _directions[asset.id] = dir);
           _resetTimers[asset.id]?.cancel();
-          _resetTimers[asset.id] = Timer(const Duration(seconds: 4), () {
+          _resetTimers[asset.id] = Timer(const Duration(seconds: 2), () {
             if (mounted) setState(() => _directions.remove(asset.id));
           });
         }

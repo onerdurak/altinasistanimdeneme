@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 
 import '../modeller.dart';
+import '../piyasa_motoru.dart';
 import '../bilesenler/grafikler.dart';
 import '../bilesenler/ortak_araclar.dart';
 
@@ -12,12 +13,14 @@ class FullScreenAssetPage extends StatefulWidget {
   final AssetType asset;
   final Map<String, Map<String, dynamic>> history;
   final List<Map<String, dynamic>> intraDayHistory;
+  final PiyasaMotoru? motor;
 
   const FullScreenAssetPage(
       {super.key,
       required this.asset,
       required this.history,
-      required this.intraDayHistory});
+      required this.intraDayHistory,
+      this.motor});
 
   @override
   State<FullScreenAssetPage> createState() => _FullScreenAssetPageState();
@@ -28,6 +31,42 @@ class _FullScreenAssetPageState extends State<FullScreenAssetPage> {
   bool _showHistory = false;
   List<Map<String, dynamic>>? _cachedChartData;
   String? _cachedPeriod;
+
+  // Canlı fiyat yön takibi
+  double _prevSellPrice = 0;
+  int _priceDirection = 0; // 1=yukarı, -1=aşağı, 0=sabit
+
+  @override
+  void initState() {
+    super.initState();
+    _prevSellPrice = widget.asset.sellPrice;
+    widget.motor?.addListener(_onMotorUpdate);
+  }
+
+  @override
+  void dispose() {
+    widget.motor?.removeListener(_onMotorUpdate);
+    super.dispose();
+  }
+
+  void _onMotorUpdate() {
+    if (!mounted) return;
+    final curr = widget.asset.sellPrice;
+    if (_prevSellPrice > 0 && (curr - _prevSellPrice).abs() > _prevSellPrice * 0.000001) {
+      _priceDirection = curr > _prevSellPrice ? 1 : -1;
+    } else {
+      _priceDirection = 0;
+    }
+    _prevSellPrice = curr;
+    _cachedChartData = null; // Grafik verisini yenile
+    setState(() {});
+  }
+
+  Color _priceColor(int dir) {
+    if (dir > 0) return const Color(0xFF00E676);
+    if (dir < 0) return const Color(0xFFFF5252);
+    return AppTheme.goldMain;
+  }
 
   List<Map<String, dynamic>> _generateChartData(String period) {
     List<Map<String, dynamic>> result = [];
@@ -235,11 +274,14 @@ class _FullScreenAssetPageState extends State<FullScreenAssetPage> {
                                         fontSize: 11,
                                         letterSpacing: 1.2)),
                                 const SizedBox(height: 5),
-                                Text(buyStr,
-                                    style: const TextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF00E676)))
+                                AnimatedDefaultTextStyle(
+                                  duration: const Duration(milliseconds: 300),
+                                  style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      color: _priceColor(_priceDirection)),
+                                  child: Text(buyStr),
+                                ),
                               ]),
                               Container(
                                   width: 1,
@@ -252,11 +294,14 @@ class _FullScreenAssetPageState extends State<FullScreenAssetPage> {
                                         fontSize: 11,
                                         letterSpacing: 1.2)),
                                 const SizedBox(height: 5),
-                                Text(sellStr,
-                                    style: const TextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppTheme.goldMain))
+                                AnimatedDefaultTextStyle(
+                                  duration: const Duration(milliseconds: 300),
+                                  style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      color: _priceColor(_priceDirection)),
+                                  child: Text(sellStr),
+                                ),
                               ]),
                             ]),
                         const SizedBox(height: 20),
