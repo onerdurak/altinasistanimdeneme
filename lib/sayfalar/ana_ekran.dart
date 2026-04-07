@@ -306,18 +306,11 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
     super.dispose();
   }
 
-  /// Border rengi: yukarı=yeşil, aşağı=kırmızı, sabit=altın sarısı
-  Color _tileBorderColor(int dir) {
-    if (dir > 0) return AppTheme.neonGreen.withOpacity(0.75);
-    if (dir < 0) return AppTheme.neonRed.withOpacity(0.75);
-    return const Color(0x26FFD700);
-  }
-
-  /// Glow rengi: yukarı=yeşil, aşağı=kırmızı, sabit=altın sarısı
-  Color _tileGlowColor(int dir) {
-    if (dir > 0) return AppTheme.neonGreen.withOpacity(0.20);
-    if (dir < 0) return AppTheme.neonRed.withOpacity(0.20);
-    return const Color(0x0FFFD700);
+  /// Fiyat yazı rengi: yukarı=yeşil, aşağı=kırmızı, sabit=altın sarısı
+  Color _priceTextColor(int dir) {
+    if (dir > 0) return AppTheme.neonGreen;
+    if (dir < 0) return AppTheme.neonRed;
+    return AppTheme.goldMain;
   }
 
   @override
@@ -484,22 +477,20 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
                   onTap: () => _onSlotTap(i),
                   onLongPress: () => _onLongPress(i),
                   child: Stack(clipBehavior: Clip.none, children: [
-                    // AnimatedContainer: fiyat yönüne göre border ve glow rengi değişir
-                    AnimatedContainer(
-                        duration: const Duration(milliseconds: 500),
-                        curve: Curves.easeInOut,
+                    // Sabit altın çerçeve, fiyat yazısı renklenir
+                    Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         decoration: BoxDecoration(
                             color: AppTheme.card,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                                color: _tileBorderColor(dir),
-                                width: dir != 0 ? 1.5 : 1.0),
+                                color: const Color(0x26FFD700),
+                                width: 1.0),
                             boxShadow: [
                               BoxShadow(
-                                  color: _tileGlowColor(dir),
-                                  blurRadius: dir != 0 ? 14 : 8,
-                                  spreadRadius: dir != 0 ? 2 : 1,
+                                  color: const Color(0x0FFFD700),
+                                  blurRadius: 8,
+                                  spreadRadius: 1,
                                   offset: const Offset(0, 2)),
                             ]),
                         child: assetId == null
@@ -524,24 +515,27 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
                                           overflow: TextOverflow.ellipsis),
                                       const SizedBox(height: 2),
                                       Row(children: [
-                                        Text(
-                                            asset.sellPrice > 0
-                                                ? (isDollar
-                                                    ? _cryptoFmt.format(
-                                                        asset.usdPrice > 0
-                                                            ? asset.usdPrice
-                                                            : asset.sellPrice)
-                                                    : (asset.category ==
-                                                            'currency'
-                                                        ? _currency2.format(
-                                                            asset.sellPrice)
-                                                        : _currency0.format(
-                                                            asset.sellPrice)))
-                                                : "-",
-                                            style: const TextStyle(
-                                                color: AppTheme.goldMain,
+                                        AnimatedDefaultTextStyle(
+                                            duration: const Duration(milliseconds: 300),
+                                            style: TextStyle(
+                                                color: _priceTextColor(dir),
                                                 fontSize: 13,
-                                                fontWeight: FontWeight.bold)),
+                                                fontWeight: FontWeight.bold),
+                                            child: Text(
+                                              asset.sellPrice > 0
+                                                  ? (isDollar
+                                                      ? _cryptoFmt.format(
+                                                          asset.usdPrice > 0
+                                                              ? asset.usdPrice
+                                                              : asset.sellPrice)
+                                                      : (asset.category ==
+                                                              'currency'
+                                                          ? _currency2.format(
+                                                              asset.sellPrice)
+                                                          : _currency0.format(
+                                                              asset.sellPrice)))
+                                                  : "-",
+                                            )),
                                         const SizedBox(width: 4),
                                         if (asset.changeRate > 0)
                                           const Icon(Icons.arrow_drop_up,
