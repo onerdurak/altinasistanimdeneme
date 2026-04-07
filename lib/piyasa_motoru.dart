@@ -11,9 +11,9 @@ class PiyasaMotoru {
   final Function onUpdate;
 
   // Ek dinleyiciler (detay sayfası vb.)
-  final List<VoidCallback> _extraListeners = [];
-  void addListener(VoidCallback cb) => _extraListeners.add(cb);
-  void removeListener(VoidCallback cb) => _extraListeners.remove(cb);
+  final List<void Function()> _extraListeners = [];
+  void addListener(void Function() cb) => _extraListeners.add(cb);
+  void removeListener(void Function() cb) => _extraListeners.remove(cb);
   void _notifyAll() {
     onUpdate();
     for (final cb in List.of(_extraListeners)) {
