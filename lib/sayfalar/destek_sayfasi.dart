@@ -306,6 +306,19 @@ class _SupportDeveloperPageState extends State<SupportDeveloperPage> {
                                           fontSize: 16)),
                                 ),
                               ),
+                              const SizedBox(height: 12),
+                              const Text(
+                                "Bu abonelik aylık olarak otomatik yenilenir. "
+                                "İstediğiniz zaman Ayarlar > Apple Kimliği > "
+                                "Abonelikler veya Google Play > Abonelikler "
+                                "bölümünden iptal edebilirsiniz. İptal, mevcut "
+                                "dönemin sonunda geçerli olur.",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    color: Colors.white38,
+                                    fontSize: 10,
+                                    height: 1.4),
+                              ),
                             ],
                           ),
                         ),
@@ -343,16 +356,6 @@ class _SupportDeveloperPageState extends State<SupportDeveloperPage> {
                             ),
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 12),
-                      // Abonelik bilgilendirme metni (Apple Guideline 3.1.2(c))
-                      Text(
-                        "Abonelik her ay otomatik olarak yenilenir. "
-                        "Aboneliğinizi istediğiniz zaman Ayarlar > Apple Kimliği > Abonelikler bölümünden iptal edebilirsiniz. "
-                        "İptal işlemi mevcut dönemin sonunda geçerli olur.",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            color: Colors.white38, fontSize: 11, height: 1.4),
                       ),
                       const SizedBox(height: 8),
                     ],
