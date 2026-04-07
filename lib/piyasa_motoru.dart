@@ -54,6 +54,10 @@ class PiyasaMotoru {
   static const String _sheetsHistoryUrl =
       'https://docs.google.com/spreadsheets/d/1hXX1HmhjTGihxapua3D9iV3gq0kNRufy2ZQDD7HykeU/export?format=csv&gid=1578620279';
 
+  // Google Sheets saatlik veri URL'si (saatlik sekmesi)
+  static const String _sheetsSaatlikUrl =
+      'https://docs.google.com/spreadsheets/d/1hXX1HmhjTGihxapua3D9iV3gq0kNRufy2ZQDD7HykeU/export?format=csv&gid=395501293';
+
   PiyasaMotoru({required this.onUpdate});
 
   /// Portföy değerlerini yeniden hesaplar.
@@ -89,8 +93,9 @@ class PiyasaMotoru {
       await fetchLiveData();
       recalcLiveValues(notify: true);
       _lastFetchTime = DateTime.now();
-      // Sheets'ten geçmiş verileri çek, sonra boşlukları doldur
+      // Sheets'ten geçmiş + saatlik verileri çek, sonra boşlukları doldur
       _fetchHistoricalFromSheets().then((_) => fillHistoricalGaps());
+      _fetchIntraDayFromSheets();
     });
 
     // 5 dakikada bir veri çek (arada sadece matrix çalışır)
@@ -511,8 +516,77 @@ class PiyasaMotoru {
     if (index < 0 || index >= cols.length) return 0.0;
     String s = cols[index].trim();
     if (s.isEmpty) return 0.0;
-    // Noktalı sayılar olabilir (Sheets'ten direkt geliyor)
-    return double.tryParse(s) ?? 0.0;
+    // Sheets Türkçe lokalde "6849,3600" formatında export eder
+    return _parseTurkishNumber(s);
+  }
+
+  // ------------------------------------------------------------------
+  // SHEETS'TEN SAATLİK VERİ ÇEK (Son 24 saat grafiği için)
+  // ------------------------------------------------------------------
+  Future<void> _fetchIntraDayFromSheets() async {
+    try {
+      final response = await http.get(Uri.parse(_sheetsSaatlikUrl))
+          .timeout(const Duration(seconds: 10),
+              onTimeout: () => http.Response('', 408));
+      if (response.statusCode != 200) return;
+
+      List<String> lines = response.body.split('\n');
+      if (lines.length < 2) return;
+
+      // Header: TARİH/SAAT, HAS, USD, EUR, BTC, ETH, ...
+      List<String> headers = _parseCsvLine(lines[0])
+          .map((h) => h.trim().toLowerCase().replaceAll('tarih/saat', 'time').replaceAll('tarih', 'time'))
+          .toList();
+
+      int iTime = headers.indexOf('time');
+      if (iTime < 0) iTime = 0; // İlk sütun zaman
+
+      List<Map<String, dynamic>> sheetsIntraDay = [];
+
+      for (int i = 1; i < lines.length; i++) {
+        String line = lines[i].trim();
+        if (line.isEmpty) continue;
+        List<String> cols = _parseCsvLine(line);
+        if (cols.isEmpty) continue;
+
+        String timeStr = cols[iTime].trim();
+        if (timeStr.isEmpty) continue;
+
+        Map<String, dynamic> prices = {};
+        for (int j = 0; j < headers.length; j++) {
+          if (j == iTime) continue;
+          String kod = headers[j].trim().toLowerCase();
+          if (kod.isEmpty) continue;
+          double val = _getCol(cols, j);
+          if (val > 0) prices[kod] = val;
+        }
+
+        if (prices.isNotEmpty) {
+          sheetsIntraDay.add({"time": timeStr, "prices": prices});
+        }
+      }
+
+      if (sheetsIntraDay.isNotEmpty) {
+        // Sheets verisi ile yerel veriyi birleştir (Sheets öncelikli)
+        Map<String, Map<String, dynamic>> merged = {};
+        for (var entry in sheetsIntraDay) {
+          merged[entry["time"]] = entry;
+        }
+        for (var entry in intraDayHistory) {
+          String key = entry["time"];
+          if (!merged.containsKey(key)) {
+            merged[key] = entry;
+          }
+        }
+        List<String> sortedKeys = merged.keys.toList()..sort();
+        intraDayHistory = sortedKeys.map((k) => merged[k]!).toList();
+        if (intraDayHistory.length > 288) {
+          intraDayHistory = intraDayHistory.sublist(intraDayHistory.length - 288);
+        }
+      }
+    } catch (e) {
+      // Sessizce devam et
+    }
   }
 
   // ------------------------------------------------------------------
