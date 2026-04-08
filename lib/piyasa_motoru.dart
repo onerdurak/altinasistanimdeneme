@@ -978,20 +978,25 @@ class PiyasaMotoru {
 
     Map<String, dynamic> currentPrices = {};
     for (var a in market) {
-      currentPrices[a.id] = a.isDollarBase ? a.usdPrice : a.sellPrice;
+      double p = a.isDollarBase ? a.usdPrice : a.sellPrice;
+      if (p > 0) currentPrices[a.id] = p;
     }
-    String timeKey = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
-    if (intraDayHistory.isEmpty || intraDayHistory.last["time"] != timeKey) {
-      intraDayHistory.add({"time": timeKey, "prices": currentPrices});
-      if (intraDayHistory.length > 288) intraDayHistory.removeAt(0);
-      await prefs.setString('intraday_history', jsonEncode(intraDayHistory));
+    // Hiç geçerli fiyat yoksa kaydetme (henüz veri gelmemiş)
+    if (currentPrices.isNotEmpty) {
+      String timeKey = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+      if (intraDayHistory.isEmpty || intraDayHistory.last["time"] != timeKey) {
+        intraDayHistory.add({"time": timeKey, "prices": currentPrices});
+        if (intraDayHistory.length > 288) intraDayHistory.removeAt(0);
+        await prefs.setString('intraday_history', jsonEncode(intraDayHistory));
+      }
     }
 
     Map<String, dynamic> todayPrices = {};
     for (var a in market) {
-      todayPrices[a.id] = a.isDollarBase ? a.usdPrice : a.sellPrice;
+      double p = a.isDollarBase ? a.usdPrice : a.sellPrice;
+      if (p > 0) todayPrices[a.id] = p;
     }
-    assetHistory[todayKey] = todayPrices;
+    if (todayPrices.isNotEmpty) assetHistory[todayKey] = todayPrices;
     await prefs.setString('asset_history_v2', jsonEncode(assetHistory));
   }
 }

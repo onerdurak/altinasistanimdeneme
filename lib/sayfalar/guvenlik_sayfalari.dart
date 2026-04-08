@@ -256,7 +256,7 @@ class AboutPage extends StatelessWidget {
                   color: AppTheme.goldMain,
                   fontSize: 22,
                   fontWeight: FontWeight.bold)),
-          const Text("Sürüm 1.0.16",
+          const Text("Sürüm 1.0.20",
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey)),
           const SizedBox(height: 40),

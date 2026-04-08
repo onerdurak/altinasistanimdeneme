@@ -289,7 +289,7 @@ class _MainLayoutState extends State<MainLayout> {
                             color: AppTheme.goldMain,
                             fontSize: 18,
                             fontWeight: FontWeight.bold)),
-                    const Text("Sürüm: 1.0.16",
+                    const Text("Sürüm: 1.0.20",
                         style: TextStyle(
                             color: Color(0x80FFFFFF), fontSize: 12))
                   ]))),

@@ -97,8 +97,8 @@ class _FullScreenAssetPageState extends State<FullScreenAssetPage> {
         for (var log in widget.intraDayHistory) {
           DateTime logTime = DateFormat('yyyy-MM-dd HH:mm').parse(log["time"]);
           if (logTime.isAfter(yesterday)) {
-            double p = (log["prices"][widget.asset.id] as num?)?.toDouble() ??
-                currentPrice;
+            double p = (log["prices"][widget.asset.id] as num?)?.toDouble() ?? 0;
+            if (p <= 0) continue; // 0 fiyat varsa grafiğe ekleme
             String timeStr = DateFormat('HH:mm').format(logTime);
             String fullStr = DateFormat('dd.MM.yyyy HH:mm').format(logTime);
             result.add({'val': p, 'label': timeStr, 'dateStr': fullStr});
@@ -134,8 +134,8 @@ class _FullScreenAssetPageState extends State<FullScreenAssetPage> {
 
     for (String dateKey in sortedDates) {
       double p =
-          (widget.history[dateKey]?[widget.asset.id] as num?)?.toDouble() ??
-              currentPrice;
+          (widget.history[dateKey]?[widget.asset.id] as num?)?.toDouble() ?? 0;
+      if (p <= 0) continue; // 0 fiyat varsa grafiğe ekleme
       DateTime dt = DateTime.parse(dateKey);
 
       String labelStr;
