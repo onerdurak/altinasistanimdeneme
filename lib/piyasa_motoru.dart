@@ -150,9 +150,14 @@ class PiyasaMotoru {
         if (asset.baseSellPrice <= 0) continue;
         if (weekendRestricted && !_weekendActive.contains(asset.id)) continue;
 
-        double maxStep = asset.baseSellPrice * 0.0002;
+        // USD bazlı varlıklar (BTC, ETH, ONS) için oransal hareket
+        double maxStep = asset.isDollarBase
+            ? asset.baseSellPrice * 0.0004
+            : asset.baseSellPrice * 0.0002;
         double step = (_random.nextDouble() - 0.5) * 2.0 * maxStep;
-        double maxDev = min(10.0, asset.baseSellPrice * 0.002);
+        double maxDev = asset.isDollarBase
+            ? asset.baseSellPrice * 0.001
+            : min(10.0, asset.baseSellPrice * 0.002);
         double newSell = (asset.sellPrice + step).clamp(
             asset.baseSellPrice - maxDev, asset.baseSellPrice + maxDev);
 
