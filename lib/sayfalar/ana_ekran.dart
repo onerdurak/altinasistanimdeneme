@@ -273,46 +273,6 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
   static final _cryptoFmt =
       NumberFormat.currency(locale: "en_US", symbol: "\$", decimalDigits: 0);
 
-  // --- Fiyat yönü takibi ---
-  final Map<String, double> _prevPrices = {};
-  final Map<String, int> _directions = {}; // 1=yukarı, -1=aşağı, 0=sabit
-  final Map<String, Timer> _resetTimers = {};
-
-  @override
-  void didUpdateWidget(QuickAccessGrid oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    for (final asset in widget.market) {
-      final prev = _prevPrices[asset.id] ?? 0.0;
-      final curr = asset.sellPrice;
-      if (prev > 0 && curr > 0 && (curr - prev).abs() > prev * 0.000001) {
-        final dir = curr > prev ? 1 : -1;
-        if (_directions[asset.id] != dir) {
-          setState(() => _directions[asset.id] = dir);
-          _resetTimers[asset.id]?.cancel();
-          _resetTimers[asset.id] = Timer(const Duration(seconds: 2), () {
-            if (mounted) setState(() => _directions.remove(asset.id));
-          });
-        }
-      }
-      _prevPrices[asset.id] = curr;
-    }
-  }
-
-  @override
-  void dispose() {
-    for (final t in _resetTimers.values) {
-      t.cancel();
-    }
-    super.dispose();
-  }
-
-  /// Fiyat yazı rengi: yukarı=yeşil, aşağı=kırmızı, sabit=altın sarısı
-  Color _priceTextColor(int dir) {
-    if (dir > 0) return AppTheme.neonGreen;
-    if (dir < 0) return AppTheme.neonRed;
-    return AppTheme.goldMain;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -469,8 +429,6 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
               String? assetId = slots[i];
               AssetType? asset = assetId != null ? marketMap[assetId] : null;
               bool isDollar = asset?.isDollarBase ?? false;
-              final int dir =
-                  (assetId != null ? _directions[assetId] : null) ?? 0;
 
               return RepaintBoundary(
                 child: GestureDetector(
@@ -515,13 +473,7 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
                                           overflow: TextOverflow.ellipsis),
                                       const SizedBox(height: 2),
                                       Row(children: [
-                                        AnimatedDefaultTextStyle(
-                                            duration: const Duration(milliseconds: 300),
-                                            style: TextStyle(
-                                                color: _priceTextColor(dir),
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.bold),
-                                            child: Text(
+                                        Text(
                                               asset.sellPrice > 0
                                                   ? (isDollar
                                                       ? _cryptoFmt.format(
@@ -535,7 +487,10 @@ class _QuickAccessGridState extends State<QuickAccessGrid> {
                                                           : _currency0.format(
                                                               asset.sellPrice)))
                                                   : "-",
-                                            )),
+                                              style: const TextStyle(
+                                                  color: AppTheme.goldMain,
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.bold)),
                                         const SizedBox(width: 4),
                                         if (asset.changeRate > 0)
                                           const Icon(Icons.arrow_drop_up,

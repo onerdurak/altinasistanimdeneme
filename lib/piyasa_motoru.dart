@@ -104,7 +104,10 @@ class PiyasaMotoru {
         _lastFetchTime = DateTime.now();
       });
     });
-    _startTickerSimulation();
+    // İlk veri gelene kadar 3 saniye bekle, sonra simulation başlat
+    Future.delayed(const Duration(seconds: 3), () {
+      _startTickerSimulation();
+    });
   }
 
   void kapat() {
@@ -132,7 +135,7 @@ class PiyasaMotoru {
 
   void _startTickerSimulation() {
     _simulationTimer?.cancel();
-    _simulationTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    _simulationTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
       if (!isLiveConnection) return;
 
       final now = DateTime.now();

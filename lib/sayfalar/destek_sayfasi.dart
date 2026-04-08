@@ -65,10 +65,10 @@ class _SupportDeveloperPageState extends State<SupportDeveloperPage> {
 
   // Tier renkleri
   static const Map<String, Color> _tierColors = {
-    'Bronz Destek': Color(0xFFCD7F32),
-    'Gümüş Destek': Color(0xFFC0C0C0),
+    'Bronz Destek': Color(0xFFFFD700),
+    'Gümüş Destek': Color(0xFFFFD700),
     'Altın Destek': Color(0xFFFFD700),
-    'Platin Destek': Color(0xFFE5E4E2),
+    'Platin Destek': Color(0xFFFFD700),
   };
 
   @override
