@@ -459,6 +459,17 @@ class PiyasaMotoru {
       int iEth = headers.indexOf('eth');
       int iOns = headers.indexOf('ons');
       int iSilver = headers.indexOf('silver');
+      int iGram = headers.indexOf('gram');
+      int iGram22 = headers.indexOf('gram22');
+      int iCeyrek = headers.indexOf('ceyrek');
+      int iYarim = headers.indexOf('yarim');
+      int iTam = headers.indexOf('tam');
+      int iAta = headers.indexOf('ata');
+      int iResat = headers.indexOf('resat');
+      int iHamit = headers.indexOf('hamit');
+      int iGremse = headers.indexOf('gremse');
+      int iBilezik14 = headers.indexOf('bilezik14');
+      int iGbp = headers.indexOf('gbp');
 
       if (iDate < 0 || iHas < 0) return;
 
@@ -482,36 +493,61 @@ class PiyasaMotoru {
         double ethUsd = _getCol(cols, iEth);
         double onsUsd = _getCol(cols, iOns);
         double silverTl = _getCol(cols, iSilver);
+        double gbpTry = _getCol(cols, iGbp);
 
-        // HAS'tan diğer altın tiplerini türet
+        // Sheets'te gerçek değerler varsa onları oku
+        double gramReal = _getCol(cols, iGram);
+        double gram22Real = _getCol(cols, iGram22);
+        double ceyrekReal = _getCol(cols, iCeyrek);
+        double yarimReal = _getCol(cols, iYarim);
+        double tamReal = _getCol(cols, iTam);
+        double ataReal = _getCol(cols, iAta);
+        double resatReal = _getCol(cols, iResat);
+        double hamitReal = _getCol(cols, iHamit);
+        double gremseReal = _getCol(cols, iGremse);
+        double bilezik14Real = _getCol(cols, iBilezik14);
+
+        // HAS'tan diğer altın tiplerini türet (fallback)
         double rawBase = hasPrice / 1.031;
         Map<String, dynamic> dPrices = {};
-        dPrices["has"] = (rawBase * 1.0767) + (rawBase * 0.01);
-        dPrices["gram"] = (rawBase * 1.0821) + (rawBase * 0.01);
-        dPrices["ceyrek"] =
-            (rawBase * 1.605 * 1.1040) + (rawBase * 1.605 * 0.01);
-        dPrices["yarim"] =
-            (rawBase * 3.210 * 1.1006) + (rawBase * 3.210 * 0.01);
-        dPrices["tam"] =
-            (rawBase * 6.420 * 1.0964) + (rawBase * 6.420 * 0.01);
-        dPrices["ata"] =
-            (rawBase * 6.610 * 1.0934) + (rawBase * 6.610 * 0.01);
-        dPrices["gremse"] =
-            (rawBase * 16.050 * 1.0939) + (rawBase * 16.050 * 0.01);
-        dPrices["resat"] =
-            (rawBase * 6.610 * 1.0934) + (rawBase * 6.610 * 0.01);
-        dPrices["hamit"] =
-            (rawBase * 6.610 * 1.0934) + (rawBase * 6.610 * 0.01);
-        dPrices["gram22"] =
-            (rawBase * 0.916 * 1.1134) + (rawBase * 0.916 * 0.01);
-        dPrices["yarim_gram22"] =
-            (rawBase * 0.458 * 1.1134) + (rawBase * 0.458 * 0.01);
-        dPrices["bilezik14"] =
-            (rawBase * 0.585 * 1.3242) + (rawBase * 0.585 * 0.01);
+
+        // Sheets'te gerçek değer varsa onu kullan, yoksa formülle hesapla
+        dPrices["has"] = hasPrice;
+        dPrices["gram"] = gramReal > 0
+            ? gramReal
+            : (rawBase * 1.0821) + (rawBase * 0.01);
+        dPrices["gram22"] = gram22Real > 0
+            ? gram22Real
+            : (rawBase * 0.916 * 1.1134) + (rawBase * 0.916 * 0.01);
+        dPrices["ceyrek"] = ceyrekReal > 0
+            ? ceyrekReal
+            : (rawBase * 1.605 * 1.1040) + (rawBase * 1.605 * 0.01);
+        dPrices["yarim"] = yarimReal > 0
+            ? yarimReal
+            : (rawBase * 3.210 * 1.1006) + (rawBase * 3.210 * 0.01);
+        dPrices["tam"] = tamReal > 0
+            ? tamReal
+            : (rawBase * 6.420 * 1.0964) + (rawBase * 6.420 * 0.01);
+        dPrices["ata"] = ataReal > 0
+            ? ataReal
+            : (rawBase * 6.610 * 1.0934) + (rawBase * 6.610 * 0.01);
+        dPrices["resat"] = resatReal > 0
+            ? resatReal
+            : (rawBase * 6.610 * 1.0934) + (rawBase * 6.610 * 0.01);
+        dPrices["hamit"] = hamitReal > 0
+            ? hamitReal
+            : (rawBase * 6.610 * 1.0934) + (rawBase * 6.610 * 0.01);
+        dPrices["gremse"] = gremseReal > 0
+            ? gremseReal
+            : (rawBase * 16.050 * 1.0939) + (rawBase * 16.050 * 0.01);
+        dPrices["bilezik14"] = bilezik14Real > 0
+            ? bilezik14Real
+            : (rawBase * 0.585 * 1.3242) + (rawBase * 0.585 * 0.01);
 
         if (silverTl > 0) dPrices["silver"] = silverTl;
         if (usdTry > 0) dPrices["usd"] = usdTry;
         if (eurTry > 0) dPrices["eur"] = eurTry;
+        if (gbpTry > 0) dPrices["gbp"] = gbpTry;
         // BTC, ETH, ONS her zaman USD bazında
         if (onsUsd > 0) dPrices["ons"] = onsUsd;
         if (btcUsd > 0) dPrices["btc"] = btcUsd;
