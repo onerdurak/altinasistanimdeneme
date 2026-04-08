@@ -205,7 +205,8 @@ class _ChangePinPageState extends State<ChangePinPage> {
 }
 
 class AboutPage extends StatelessWidget {
-  const AboutPage({super.key});
+  final String version;
+  const AboutPage({super.key, this.version = '1.0.20'});
   Widget _buildGuideSection(IconData icon, String title, String desc) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 25),
@@ -256,9 +257,9 @@ class AboutPage extends StatelessWidget {
                   color: AppTheme.goldMain,
                   fontSize: 22,
                   fontWeight: FontWeight.bold)),
-          const Text("Sürüm 1.0.20",
+          Text("Sürüm $version",
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey)),
+              style: const TextStyle(color: Colors.grey)),
           const SizedBox(height: 40),
           const Text("NASIL KULLANILIR?",
               style: TextStyle(

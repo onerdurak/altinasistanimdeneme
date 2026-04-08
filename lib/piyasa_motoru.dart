@@ -45,6 +45,9 @@ class PiyasaMotoru {
   double liveCreditVal = 0;
   double liveDebtVal = 0;
 
+  /// Sheets'ten okunan güncel sürüm bilgisi (Canlı Kur B21)
+  String sheetVersion = '';
+
   Timer? _refreshTimer;
   Timer? _simulationTimer;
   final Random _random = Random();
@@ -337,6 +340,16 @@ class PiyasaMotoru {
 
       Map<String, Map<String, double>> sheetData = {};
       List<String> lines = response.body.split('\n');
+
+      // B21 hücresinden sürüm bilgisini oku (satır 21, sütun B=index 1)
+      if (lines.length >= 21) {
+        List<String> row21 = _parseCsvLine(lines[20]);
+        if (row21.length >= 2) {
+          String v = row21[1].trim();
+          if (v.isNotEmpty) sheetVersion = v;
+        }
+      }
+
       for (int i = 1; i < lines.length; i++) {
         String line = lines[i].trim();
         if (line.isEmpty) continue;

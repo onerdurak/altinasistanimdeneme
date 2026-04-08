@@ -289,8 +289,11 @@ class _MainLayoutState extends State<MainLayout> {
                             color: AppTheme.goldMain,
                             fontSize: 18,
                             fontWeight: FontWeight.bold)),
-                    const Text("Sürüm: 1.0.20",
-                        style: TextStyle(
+                    Text(
+                        _motor.sheetVersion.isNotEmpty
+                            ? "Sürüm: ${_motor.sheetVersion}"
+                            : "Sürüm: 1.0.20",
+                        style: const TextStyle(
                             color: Color(0x80FFFFFF), fontSize: 12))
                   ]))),
           ListTile(
@@ -300,7 +303,10 @@ class _MainLayoutState extends State<MainLayout> {
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(context,
-                    MaterialPageRoute(builder: (c) => const AboutPage()));
+                    MaterialPageRoute(builder: (c) => AboutPage(
+                        version: _motor.sheetVersion.isNotEmpty
+                            ? _motor.sheetVersion
+                            : '1.0.20')));
               }),
           ListTile(
               leading: const Icon(Icons.chat_bubble_outline,
