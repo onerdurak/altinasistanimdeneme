@@ -1,7 +1,7 @@
 name: altin_asistanim
 description: Altin ve Borc Takip Uygulamasi
 publish_to: 'none'
-version: 1.0.20+49
+version: 1.0.21+50
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
