@@ -373,8 +373,14 @@ class PiyasaMotoru {
 
       const sheetsIds = [
         'has', 'gram', 'gram22', 'ceyrek', 'yarim', 'tam',
-        'ata', 'resat', 'hamit', 'gremse', 'bilezik14', 'silver'
+        'ata', 'resat', 'hamit', 'gremse', 'bilezik14', 'silver',
+        'usd', 'eur', 'gbp', 'ons', 'btc', 'eth'
       ];
+      // Döviz kuru mantık limitleri (aşırı parse hatası önlemi)
+      const _maxSanity = <String, double>{
+        'usd': 500, 'eur': 500, 'gbp': 500, 'silver': 1000,
+      };
+
       for (var asset in market) {
         if (!sheetsIds.contains(asset.id)) continue;
         var data = sheetData[asset.id];
@@ -383,6 +389,8 @@ class PiyasaMotoru {
         double buy = data['buy']!;
         double change = data['change']!;
         if (sell <= 0) continue;
+        // Mantık kontrolü: döviz kurları aşırı yüksekse hatalı parse
+        if (_maxSanity.containsKey(asset.id) && sell > _maxSanity[asset.id]!) continue;
         if (buy <= 0) buy = sell * 0.98;
         asset.applyNewPrices(sell, buy, change);
       }
@@ -416,12 +424,23 @@ class PiyasaMotoru {
   }
 
   // Türkçe sayı formatını double'a çevirir: "6.805,69" → 6805.69, "2,74%" → 2.74
+  // "59.742,00" gibi hatalı binlik formatlarını da yakalar
   double _parseTurkishNumber(String raw) {
     try {
       String s = raw.trim().replaceAll('%', '').replaceAll('"', '');
+      if (s.isEmpty) return 0.0;
+
       if (s.contains('.') && s.contains(',')) {
-        // 6.805,69 → binlik nokta, ondalık virgül
-        s = s.replaceAll('.', '').replaceAll(',', '.');
+        // Önce nokta mı virgül mü son: "6.805,69" vs "6,805.69"
+        int lastDot = s.lastIndexOf('.');
+        int lastComma = s.lastIndexOf(',');
+        if (lastComma > lastDot) {
+          // Türkçe: nokta binlik, virgül ondalık → 6.805,69
+          s = s.replaceAll('.', '').replaceAll(',', '.');
+        } else {
+          // İngilizce: virgül binlik, nokta ondalık → 6,805.69
+          s = s.replaceAll(',', '');
+        }
       } else if (s.contains(',')) {
         s = s.replaceAll(',', '.');
       }
@@ -549,14 +568,18 @@ class PiyasaMotoru {
             ? bilezik14Real
             : (rawBase * 0.585 * 1.3242) + (rawBase * 0.585 * 0.01);
 
-        if (silverTl > 0) dPrices["silver"] = silverTl;
-        if (usdTry > 0) dPrices["usd"] = usdTry;
-        if (eurTry > 0) dPrices["eur"] = eurTry;
-        if (gbpTry > 0) dPrices["gbp"] = gbpTry;
+        if (silverTl > 0 && silverTl < 1000) dPrices["silver"] = silverTl;
+        if (usdTry > 0 && usdTry < 500) dPrices["usd"] = usdTry;
+        if (eurTry > 0 && eurTry < 500) dPrices["eur"] = eurTry;
+        if (gbpTry > 0 && gbpTry < 500) dPrices["gbp"] = gbpTry;
         // BTC, ETH, ONS her zaman USD bazında
         if (onsUsd > 0) dPrices["ons"] = onsUsd;
         if (btcUsd > 0) dPrices["btc"] = btcUsd;
         if (ethUsd > 0) dPrices["eth"] = ethUsd;
+
+        // yarim_gram22 = gram22 / 2
+        double g22 = (dPrices["gram22"] as num?)?.toDouble() ?? 0;
+        if (g22 > 0) dPrices["yarim_gram22"] = g22 / 2;
 
         assetHistory[dateKey] = dPrices;
       }

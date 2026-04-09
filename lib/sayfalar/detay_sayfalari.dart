@@ -98,7 +98,20 @@ class _FullScreenAssetPageState extends State<FullScreenAssetPage> {
           DateTime logTime = DateFormat('yyyy-MM-dd HH:mm').parse(log["time"]);
           if (logTime.isAfter(yesterday)) {
             double p = (log["prices"][widget.asset.id] as num?)?.toDouble() ?? 0;
-            if (p <= 0) continue; // 0 fiyat varsa grafiğe ekleme
+            // Veri yoksa referans emtiadan türet
+            if (p <= 0 && currentPrice > 0) {
+              String refId = widget.asset.isDollarBase ? 'ons' : 'has';
+              double refP = (log["prices"][refId] as num?)?.toDouble() ?? 0;
+              if (refP > 0) {
+                double nowRef = widget.asset.isDollarBase ? 4672.80 : 6900;
+                for (var lg in widget.intraDayHistory) {
+                  double r = (lg["prices"][refId] as num?)?.toDouble() ?? 0;
+                  if (r > 0) nowRef = r;
+                }
+                p = currentPrice * (refP / nowRef);
+              }
+            }
+            if (p <= 0) continue;
             String timeStr = DateFormat('HH:mm').format(logTime);
             String fullStr = DateFormat('dd.MM.yyyy HH:mm').format(logTime);
             result.add({'val': p, 'label': timeStr, 'dateStr': fullStr});
@@ -135,7 +148,31 @@ class _FullScreenAssetPageState extends State<FullScreenAssetPage> {
     for (String dateKey in sortedDates) {
       double p =
           (widget.history[dateKey]?[widget.asset.id] as num?)?.toDouble() ?? 0;
-      if (p <= 0) continue; // 0 fiyat varsa grafiğe ekleme
+
+      // Geçmişi olmayan emtia → ONS veya HAS oranından türet
+      if (p <= 0 && currentPrice > 0) {
+        double refOns = (widget.history[dateKey]?['ons'] as num?)?.toDouble() ?? 0;
+        double refHas = (widget.history[dateKey]?['has'] as num?)?.toDouble() ?? 0;
+        if (widget.asset.isDollarBase && refOns > 0) {
+          // USD bazlı: ONS oranı ile türet
+          double nowOns = 4672.80; // yaklaşık ONS fiyatı
+          for (var h in widget.history.values) {
+            double o = (h['ons'] as num?)?.toDouble() ?? 0;
+            if (o > 0) { nowOns = o; }
+          }
+          p = currentPrice * (refOns / nowOns);
+        } else if (refHas > 0) {
+          // TL bazlı: HAS oranı ile türet
+          double nowHas = 6900;
+          for (var h in widget.history.values) {
+            double o = (h['has'] as num?)?.toDouble() ?? 0;
+            if (o > 0) { nowHas = o; }
+          }
+          p = currentPrice * (refHas / nowHas);
+        }
+      }
+
+      if (p <= 0) continue;
       DateTime dt = DateTime.parse(dateKey);
 
       String labelStr;
