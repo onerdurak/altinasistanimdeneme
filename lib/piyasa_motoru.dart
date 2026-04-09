@@ -246,10 +246,8 @@ class PiyasaMotoru {
             'https://api.binance.com/api/v3/ticker/24hr?symbol=ETHUSDT'))
             .timeout(const Duration(seconds: 5),
                 onTimeout: () => http.Response('', 408)),
-        http.get(Uri.parse(
-            'https://api.binance.com/api/v3/ticker/24hr?symbol=GBPUSDT'))
-            .timeout(const Duration(seconds: 5),
-                onTimeout: () => http.Response('', 408)),
+        // GBP Binance'tan alınmaz — GBPUSDT platform kurudur, forex kuru değil
+        // GBP doğru fiyat Sheets'ten gelir (_fetchSheetsData)
       ]);
 
       if (results[0].statusCode != 200) return false;
@@ -315,18 +313,7 @@ class PiyasaMotoru {
         }
       }
 
-      if (results[5].statusCode == 200) {
-        final d = json.decode(results[5].body);
-        double gbpUsd = double.parse(d['lastPrice']);
-        double gbpChange = double.parse(d['priceChangePercent']);
-        double gbpTry = gbpUsd * usdTry;
-        for (var a in market) {
-          if (a.id == 'gbp') {
-            a.applyNewPrices(
-                gbpTry * a.sellMarkup, gbpTry * a.buyMarkup, gbpChange);
-          }
-        }
-      }
+      // GBP fiyatı Sheets'ten alınır (_fetchSheetsData)
 
       return true;
     } catch (e) {
@@ -698,7 +685,7 @@ class PiyasaMotoru {
         _fetchKlines('PAXGUSDT', startTime, limit),
         _fetchKlines('BTCUSDT', startTime, limit),
         _fetchKlines('ETHUSDT', startTime, limit),
-        _fetchKlines('GBPUSDT', startTime, limit),
+        // GBP Binance'tan alınmaz — yanlış platform kuru verir
       ]);
 
       Map<String, double> usdRates = results[0];
@@ -706,7 +693,6 @@ class PiyasaMotoru {
       Map<String, double> goldOnsUsd = results[2];
       Map<String, double> btcUsd = results[3];
       Map<String, double> ethUsd = results[4];
-      Map<String, double> gbpUsdRates = results[5];
 
       if (usdRates.isEmpty && goldOnsUsd.isEmpty) return;
 
@@ -756,13 +742,11 @@ class PiyasaMotoru {
 
         double silverBaseTL = rawBase / 66.0;
         double eurTry = eurUsd * usdTry;
-        double gbpUsd = gbpUsdRates[dateKey] ?? 1.27;
-        double gbpTry = gbpUsd * usdTry;
 
         dPrices["silver"] = silverBaseTL * 1.0957;
         dPrices["usd"] = usdTry;
         dPrices["eur"] = eurTry;
-        dPrices["gbp"] = gbpTry;
+        // GBP geçmişi Sheets'ten gelir, Binance'tan değil
         dPrices["ons"] = paxgUsd;    // USD bazında
         dPrices["btc"] = btc;         // USD bazında
         dPrices["eth"] = eth;         // USD bazında
