@@ -7,27 +7,102 @@ import 'package:url_launcher/url_launcher.dart';
 import '../modeller.dart';
 
 /// Global premium abonelik durumu yöneticisi
+/// Tek seferlik destekler süre kazandırır, aylık abonelik süresince aktif kalır
 class PremiumManager {
-  static bool isPremium = false;
+  static bool _isSubscriptionActive = false;
+  static DateTime? _premiumExpiry;
 
-  /// Uygulama açılışında çağır — cache'den hızlı oku, sonra mağazadan doğrula
-  static Future<void> checkPremiumStatus() async {
-    final prefs = await SharedPreferences.getInstance();
-    isPremium = prefs.getBool('is_premium') ?? false;
-
-    // Mağazadan doğrula (arka planda)
-    try {
-      final iap = InAppPurchase.instance;
-      final available = await iap.isAvailable();
-      if (available) await iap.restorePurchases();
-    } catch (_) {}
+  /// Premium durumunu kontrol et (abonelik aktif VEYA süre dolmamış)
+  static bool get isPremium {
+    if (_isSubscriptionActive) return true;
+    if (_premiumExpiry != null && _premiumExpiry!.isAfter(DateTime.now())) {
+      return true;
+    }
+    return false;
   }
 
-  /// Satın alma onaylandığında çağır
-  static Future<void> setPremium(bool value) async {
-    isPremium = value;
+  /// Premium durum metni
+  static String get premiumStatusText {
+    if (_isSubscriptionActive) return "Aktif Abonelik ✓";
+    if (_premiumExpiry != null && _premiumExpiry!.isAfter(DateTime.now())) {
+      final days = _premiumExpiry!.difference(DateTime.now()).inDays;
+      if (days > 30) {
+        final months = (days / 30).floor();
+        return "$months ay kaldı";
+      }
+      return "$days gün kaldı";
+    }
+    return "";
+  }
+
+  /// Uygulama açılışında çağır — cache'den hızlı oku
+  static Future<void> checkPremiumStatus() async {
     final prefs = await SharedPreferences.getInstance();
+    _isSubscriptionActive =
+        prefs.getBool('is_subscription_active') ?? false;
+    String? expiryStr = prefs.getString('premium_expiry');
+    if (expiryStr != null) {
+      _premiumExpiry = DateTime.tryParse(expiryStr);
+    }
+    // Geriye uyumluluk: eski bool flag kontrol
+    if (prefs.getBool('is_premium') == true &&
+        !_isSubscriptionActive &&
+        _premiumExpiry == null) {
+      _isSubscriptionActive = true;
+    }
+  }
+
+  /// Aylık abonelik aktif/pasif
+  static Future<void> setSubscriptionActive(bool value) async {
+    _isSubscriptionActive = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_subscription_active', value);
     await prefs.setBool('is_premium', value);
+  }
+
+  /// Tek seferlik destek → premium süre ekle (ay bazında)
+  static Future<void> addPremiumMonths(int months) async {
+    DateTime base =
+        (_premiumExpiry != null && _premiumExpiry!.isAfter(DateTime.now()))
+            ? _premiumExpiry!
+            : DateTime.now();
+    _premiumExpiry =
+        DateTime(base.year, base.month + months, base.day);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+        'premium_expiry', _premiumExpiry!.toIso8601String());
+  }
+
+  /// Ürün ID → premium süre eşleştirmesi
+  static const Map<String, int> productPremiumMonths = {
+    'destek_100': 6,
+    'destek_200': 12,
+    'destek_500': 24,
+    'destek_1000': 48,
+    'bronz_destek': 6,
+    'gumus_destek': 12,
+    'altin_destek': 24,
+    'platin_destek': 48,
+  };
+
+  /// Abonelik ürün ID'leri
+  static const Set<String> subscriptionIds = {
+    'aylik20plan',
+    'aylik_destek',
+  };
+
+  /// Satın alma işlendiğinde çağır (global listener tarafından)
+  static Future<void> handlePurchase(String productId) async {
+    if (subscriptionIds.contains(productId)) {
+      await setSubscriptionActive(true);
+    } else if (productPremiumMonths.containsKey(productId)) {
+      await addPremiumMonths(productPremiumMonths[productId]!);
+    }
+  }
+
+  /// Legacy setter (geriye uyumluluk)
+  static Future<void> setPremium(bool value) async {
+    await setSubscriptionActive(value);
   }
 }
 
@@ -97,6 +172,18 @@ class _SupportDeveloperPageState extends State<SupportDeveloperPage> {
     'Platin Destek': Color(0xFFFFD700),
   };
 
+  // Ürün ID → Premium süre açıklaması
+  static const Map<String, String> _tierPremiumLabel = {
+    'destek_100': '6 Ay Premium',
+    'destek_200': '12 Ay Premium',
+    'destek_500': '24 Ay Premium',
+    'destek_1000': '48 Ay Premium',
+    'bronz_destek': '6 Ay Premium',
+    'gumus_destek': '12 Ay Premium',
+    'altin_destek': '24 Ay Premium',
+    'platin_destek': '48 Ay Premium',
+  };
+
   @override
   void initState() {
     super.initState();
@@ -150,12 +237,21 @@ class _SupportDeveloperPageState extends State<SupportDeveloperPage> {
               backgroundColor: AppTheme.neonRed));
         } else if (purchaseDetails.status == PurchaseStatus.purchased ||
             purchaseDetails.status == PurchaseStatus.restored) {
-          // Abonelik ise premium aç
-          if (purchaseDetails.productID == _subscriptionId) {
-            PremiumManager.setPremium(true);
+          // Yeni süre bazlı premium sistemi
+          PremiumManager.handlePurchase(purchaseDetails.productID);
+          setState(() {}); // UI güncelle
+          final pid = purchaseDetails.productID;
+          final months = PremiumManager.productPremiumMonths[pid];
+          String msg;
+          if (PremiumManager.subscriptionIds.contains(pid)) {
+            msg = "Aylık abonelik aktif! Premium özellikler açıldı 💛";
+          } else if (months != null) {
+            msg = "Teşekkürler! $months ay Premium kazandınız 💛";
+          } else {
+            msg = "Desteğiniz için sonsuz teşekkürler! 💛";
           }
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text("Desteğiniz için sonsuz teşekkürler! 💛"),
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(msg),
               backgroundColor: AppTheme.goldMain));
         }
         if (purchaseDetails.pendingCompletePurchase) {
@@ -203,7 +299,7 @@ class _SupportDeveloperPageState extends State<SupportDeveloperPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Geliştiriciye Destek Ol")),
+      appBar: AppBar(title: const Text("Premium Paketler")),
       body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(color: AppTheme.goldMain))
@@ -220,11 +316,39 @@ class _SupportDeveloperPageState extends State<SupportDeveloperPage> {
                         size: 80, color: AppTheme.goldMain),
                     const SizedBox(height: 20),
                     const Text(
-                      "Altın Asistanım'ı faydalı bulduysanız ve ücretsiz kalmasına katkıda bulunmak isterseniz aşağıdaki paketlerden birini seçerek destek olabilirsiniz.",
+                      "Premium ile Borsa sekmesi, BIST 100 canlı takip ve portföye hisse ekleme gibi özellikler açılır.\n\nAşağıdaki paketlerden birini seçerek Premium'a geçin!",
                       textAlign: TextAlign.center,
                       style: TextStyle(
                           color: Colors.white70, fontSize: 15, height: 1.5),
                     ),
+                    // Premium durum göstergesi
+                    if (PremiumManager.isPremium) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                            color: const Color(0x1AFFD700),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: AppTheme.goldMain.withAlpha(80))),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.verified,
+                                color: AppTheme.goldMain, size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              "Premium: ${PremiumManager.premiumStatusText}",
+                              style: const TextStyle(
+                                  color: AppTheme.goldMain,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 30),
 
                     // --- TEK SEFERLİK ÜRÜNLER (Bronz/Gümüş/Altın/Platin) ---
@@ -235,6 +359,8 @@ class _SupportDeveloperPageState extends State<SupportDeveloperPage> {
                           _tierColors[tierName] ?? AppTheme.goldMain;
                       final tierIcon =
                           _tierIcons[tierName] ?? Icons.workspace_premium;
+                      final premLabel =
+                          _tierPremiumLabel[product.id] ?? 'Tek Seferlik';
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 12),
@@ -251,9 +377,9 @@ class _SupportDeveloperPageState extends State<SupportDeveloperPage> {
                               style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: tierColor)),
-                          subtitle: const Text("Tek Seferlik",
-                              style:
-                                  TextStyle(color: Colors.grey, fontSize: 11)),
+                          subtitle: Text("Tek Seferlik · $premLabel",
+                              style: const TextStyle(
+                                  color: Colors.grey, fontSize: 11)),
                           trailing: ElevatedButton(
                             style: ElevatedButton.styleFrom(
                                 backgroundColor: tierColor,
@@ -311,7 +437,7 @@ class _SupportDeveloperPageState extends State<SupportDeveloperPage> {
                                       letterSpacing: 1.2)),
                               const SizedBox(height: 5),
                               const Text(
-                                  "Her ay düzenli destek olarak projenin büyümesine en büyük katkıyı sağlayın.",
+                                  "Her ay düzenli destek olarak projenin büyümesine en büyük katkıyı sağlayın.\nAbonelik süresince Premium özellikler aktif kalır.",
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                       color: Colors.white70, fontSize: 12)),

@@ -1,12 +1,16 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../modeller.dart';
 import '../bilesenler/ortak_araclar.dart';
+import 'destek_sayfasi.dart';
 
 // ══════════════════════════════════════════════════════
 //  BORSA SAYFASI — Premium kilidi + Canlı BIST 100
@@ -35,6 +39,100 @@ class BorsaPage extends StatefulWidget {
 }
 
 class _BorsaPageState extends State<BorsaPage> {
+  final InAppPurchase _iap = InAppPurchase.instance;
+  late StreamSubscription<List<PurchaseDetails>> _purchaseSub;
+  List<ProductDetails> _products = [];
+  bool _storeLoading = true;
+  bool _restoring = false;
+
+  // Platform bazlı ürün ID'leri
+  static final Set<String> _googleIds = {
+    'destek_100', 'destek_200', 'destek_500', 'destek_1000', 'aylik20plan',
+  };
+  static final Set<String> _appleIds = {
+    'bronz_destek', 'gumus_destek', 'altin_destek', 'platin_destek', 'aylik_destek',
+  };
+  Set<String> get _kIds => Platform.isIOS ? _appleIds : _googleIds;
+  String get _subscriptionId => Platform.isIOS ? 'aylik_destek' : 'aylik20plan';
+
+  @override
+  void initState() {
+    super.initState();
+    _purchaseSub = _iap.purchaseStream.listen(_onPurchaseUpdate,
+        onError: (_) {});
+    _loadProducts();
+  }
+
+  @override
+  void dispose() {
+    _purchaseSub.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadProducts() async {
+    try {
+      final available = await _iap.isAvailable();
+      if (!available) {
+        if (mounted) setState(() => _storeLoading = false);
+        return;
+      }
+      final resp = await _iap.queryProductDetails(_kIds);
+      if (mounted) {
+        setState(() {
+          _products = resp.productDetails;
+          _products.sort((a, b) => a.rawPrice.compareTo(b.rawPrice));
+          _storeLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _storeLoading = false);
+    }
+  }
+
+  void _onPurchaseUpdate(List<PurchaseDetails> list) {
+    for (var pd in list) {
+      if (pd.status == PurchaseStatus.purchased ||
+          pd.status == PurchaseStatus.restored) {
+        PremiumManager.handlePurchase(pd.productID);
+        if (mounted) setState(() {});
+        if (pd.status == PurchaseStatus.purchased && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text("Premium aktif! Borsa kilidi açıldı 💛"),
+              backgroundColor: AppTheme.goldMain));
+        }
+      } else if (pd.status == PurchaseStatus.error && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text("İşlem iptal edildi veya bir hata oluştu."),
+            backgroundColor: AppTheme.neonRed));
+      }
+      if (pd.pendingCompletePurchase) _iap.completePurchase(pd);
+    }
+    if (mounted && _restoring) setState(() => _restoring = false);
+  }
+
+  void _buyProduct(ProductDetails product) {
+    final param = PurchaseParam(productDetails: product);
+    if (product.id == _subscriptionId) {
+      _iap.buyNonConsumable(purchaseParam: param);
+    } else {
+      _iap.buyConsumable(purchaseParam: param);
+    }
+  }
+
+  Future<void> _restorePurchases() async {
+    setState(() => _restoring = true);
+    try {
+      await _iap.restorePurchases();
+    } catch (_) {
+      if (mounted) {
+        setState(() => _restoring = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text("Geri yükleme sırasında bir hata oluştu."),
+            backgroundColor: AppTheme.neonRed));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!widget.isPremium) {
@@ -45,6 +143,17 @@ class _BorsaPageState extends State<BorsaPage> {
 
   // ── Premium kilitli bulanık ekran ──
   Widget _buildLockedView() {
+    // Abonelik ürününü bul
+    ProductDetails? subProduct;
+    try {
+      subProduct = _products.firstWhere((p) => p.id == _subscriptionId);
+    } catch (_) {
+      subProduct = null;
+    }
+    // Tek seferlik ürünler
+    final oneTimeProducts =
+        _products.where((p) => p.id != _subscriptionId).toList();
+
     return Stack(
       children: [
         // Arka planda bulanık önizleme
@@ -58,10 +167,12 @@ class _BorsaPageState extends State<BorsaPage> {
         Positioned.fill(
           child: Container(
             color: Colors.black.withOpacity(0.5),
-            child: Center(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Kilit ikonu
                   Container(
                     width: 80,
                     height: 80,
@@ -73,40 +184,213 @@ class _BorsaPageState extends State<BorsaPage> {
                     child: const Icon(Icons.lock_outline,
                         color: AppTheme.goldMain, size: 40),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                   const Text("BORSA",
                       style: TextStyle(
                           color: AppTheme.goldMain,
                           fontSize: 24,
                           fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   const Text("Premium Abonelik Gerekli",
                       style: TextStyle(color: Colors.white70, fontSize: 14)),
                   const SizedBox(height: 6),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 40),
-                    child: Text(
-                      "BIST 100 hisselerini takip etmek, portfoyunuze eklemek ve canli fiyatlari gormek icin Premium abonelik gereklidir.",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.4),
-                    ),
+                  const Text(
+                    "BIST 100 hisselerini takip etmek, portfoyunuze eklemek ve canlı fiyatları görmek için Premium gereklidir.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: Colors.white38, fontSize: 12, height: 1.4),
                   ),
                   const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: widget.onPremiumTap,
-                    icon: const Icon(Icons.workspace_premium),
-                    label: const Text("Premium Satin Al"),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.goldMain,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 32, vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      textStyle: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold),
+
+                  // ── Aylık Abonelik ──
+                  if (_storeLoading)
+                    const Padding(
+                      padding: EdgeInsets.all(20),
+                      child: CircularProgressIndicator(
+                          color: AppTheme.goldMain, strokeWidth: 2),
+                    )
+                  else ...[
+                    if (subProduct != null) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(colors: [
+                            AppTheme.card,
+                            AppTheme.goldMain.withAlpha(20),
+                          ]),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                              color: AppTheme.goldMain.withAlpha(100)),
+                        ),
+                        child: Column(children: [
+                          const Icon(Icons.star_rounded,
+                              color: AppTheme.goldMain, size: 28),
+                          const SizedBox(height: 6),
+                          const Text("AYLIK ABONELİK",
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          const Text(
+                              "Abonelik süresince tüm Premium özellikler aktif",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  color: Colors.white54, fontSize: 11)),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 46,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.goldMain,
+                                foregroundColor: Colors.black,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                              ),
+                              onPressed: () => _buyProduct(subProduct!),
+                              child: Text("${subProduct.price} / Ay",
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15)),
+                            ),
+                          ),
+                        ]),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // ── Tek seferlik destek paketleri ──
+                    if (oneTimeProducts.isNotEmpty) ...[
+                      const Text("veya tek seferlik destek ile Premium kazan",
+                          style: TextStyle(
+                              color: Colors.white54, fontSize: 12)),
+                      const SizedBox(height: 10),
+                      ...oneTimeProducts.map((p) {
+                        final months =
+                            PremiumManager.productPremiumMonths[p.id] ?? 0;
+                        final label = months > 0
+                            ? "$months Ay Premium"
+                            : "Destek";
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: AppTheme.card,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: AppTheme.goldMain.withAlpha(50)),
+                          ),
+                          child: ListTile(
+                            dense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 0),
+                            leading: const Icon(Icons.workspace_premium,
+                                color: AppTheme.goldMain, size: 22),
+                            title: Text(label,
+                                style: const TextStyle(
+                                    color: AppTheme.goldMain,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13)),
+                            trailing: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.goldMain,
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 6),
+                                minimumSize: Size.zero,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8)),
+                              ),
+                              onPressed: () => _buyProduct(p),
+                              child: Text(p.price,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12)),
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+
+                    const SizedBox(height: 16),
+
+                    // ── Geri Yükle butonu ──
+                    _restoring
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                                color: AppTheme.goldMain, strokeWidth: 2))
+                        : TextButton.icon(
+                            onPressed: _restorePurchases,
+                            icon: const Icon(Icons.restore,
+                                color: AppTheme.goldMain, size: 18),
+                            label: const Text(
+                              "Satın Alımları Geri Yükle",
+                              style: TextStyle(
+                                  color: AppTheme.goldMain,
+                                  fontSize: 12,
+                                  decoration: TextDecoration.underline,
+                                  decorationColor: AppTheme.goldMain),
+                            ),
+                          ),
+                    const SizedBox(height: 6),
+                    // ── Geliştiriciyi Destekle linki ──
+                    TextButton(
+                      onPressed: widget.onPremiumTap,
+                      child: const Text(
+                        "Tüm Destek Paketlerini Gör",
+                        style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12,
+                            decoration: TextDecoration.underline,
+                            decorationColor: Colors.white54),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 12),
+
+                    // ── Yasal linkler (Apple 3.1.2) ──
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        GestureDetector(
+                          onTap: () => launchUrl(Uri.parse(
+                              'https://onerdurak.github.io/altin-asistanim-privacy/privacy-policy.html#terms')),
+                          child: const Text("Kullanım Koşulları",
+                              style: TextStyle(
+                                  color: AppTheme.goldMain,
+                                  fontSize: 11,
+                                  decoration: TextDecoration.underline,
+                                  decorationColor: AppTheme.goldMain)),
+                        ),
+                        const Text("  •  ",
+                            style: TextStyle(
+                                color: Colors.white38, fontSize: 11)),
+                        GestureDetector(
+                          onTap: () => launchUrl(Uri.parse(
+                              'https://onerdurak.github.io/altin-asistanim-privacy/privacy-policy.html')),
+                          child: const Text("Gizlilik Politikası",
+                              style: TextStyle(
+                                  color: AppTheme.goldMain,
+                                  fontSize: 11,
+                                  decoration: TextDecoration.underline,
+                                  decorationColor: AppTheme.goldMain)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      "Abonelik aylık otomatik yenilenir. İptal için: "
+                      "Ayarlar > Apple Kimliği > Abonelikler veya "
+                      "Google Play > Abonelikler",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: Colors.white24,
+                          fontSize: 9,
+                          height: 1.3),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -152,7 +436,7 @@ class _BorsaPageState extends State<BorsaPage> {
     );
   }
 
-  // ── Premium acik icerik ──
+  // ── Premium açık içerik ──
   Widget _buildPremiumContent() {
     return RefreshIndicator(
       color: AppTheme.goldMain,

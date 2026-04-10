@@ -360,8 +360,8 @@ class _MainLayoutState extends State<MainLayout> {
           const Divider(color: Colors.white10),
           ListTile(
               leading:
-                  const Icon(Icons.favorite_rounded, color: AppTheme.goldMain),
-              title: const Text("Geliştiriciye Destek Ol"),
+                  const Icon(Icons.workspace_premium, color: AppTheme.goldMain),
+              title: const Text("Premium Paketler"),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
