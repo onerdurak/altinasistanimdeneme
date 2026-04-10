@@ -189,8 +189,8 @@ class PiyasaMotoru {
     });
   }
 
-  // --- KARMA MOTOR: ÖNCE BİNANCE (HIZLI) → SONRA SHEETS (YAVAŞ, ARKA PLAN) ---
-  // 5 dakikada 1 çeker, arada matrix simülasyonu çalışır
+  // --- KARMA MOTOR: BİNANCE + SHEETS PARALEL ---
+  // GBP sadece Sheets'ten gelir — paralel çalışmazsa GBP=0 kalır
   Future<void> fetchLiveData({bool silent = false, bool force = false}) async {
     // Son çekimden 5 dakika geçmediyse ve zorla değilse atla
     if (silent && !force && _lastFetchTime != null) {
@@ -204,7 +204,8 @@ class PiyasaMotoru {
     }
 
     try {
-      // ── 1. ADIM: BİNANCE (hızlı, önce gelsin) ──
+      // Binance ve Sheets paralel başlasın (GBP sadece Sheets'ten gelir)
+      final sheetsFuture = _fetchSheetsData();
       bool binanceOk = await _fetchBinanceData();
 
       if (binanceOk) {
@@ -212,14 +213,21 @@ class PiyasaMotoru {
         isLiveConnection = true;
         _lastFetchTime = DateTime.now();
         _syncCustomAssets();
-        updateDailyHistory();
-        saveMarketCache();
-        // Matrix hemen başlasın, Sheets'i beklemesin
+        // Binance verisi hemen gösterilsin
         onUpdate();
       }
 
-      // ── 2. ADIM: SHEETS (yavaş, arka planda 30sn sonra) ──
-      _scheduleSheetsUpdate();
+      // Sheets tamamlanmasını bekle (GBP + altın düzeltmeleri)
+      await sheetsFuture;
+
+      // GBP fallback: Sheets başarısız olursa EUR'dan tahmin et
+      _applyGbpFallback();
+
+      // Her iki kaynak sonrası final güncelleme
+      _syncCustomAssets();
+      updateDailyHistory();
+      saveMarketCache();
+      onUpdate();
     } catch (e) {
       isLiveConnection = false;
     } finally {
@@ -230,11 +238,21 @@ class PiyasaMotoru {
     }
   }
 
-  // Sheets verisini 1 saniye sonra arka planda çek (Binance'i beklemesin)
-  void _scheduleSheetsUpdate() {
-    Future.delayed(const Duration(seconds: 1), () async {
-      await _fetchSheetsData();
-    });
+  /// GBP hâlâ 0 ise EUR/USD oranından yaklaşık hesapla
+  void _applyGbpFallback() {
+    final gbpAsset = market.firstWhere((a) => a.id == 'gbp',
+        orElse: () => AssetType('', [], '', '', 0, 0, ''));
+    if (gbpAsset.id.isEmpty || gbpAsset.sellPrice > 0) return;
+
+    // EUR TL fiyatını bul
+    final eurAsset = market.firstWhere((a) => a.id == 'eur',
+        orElse: () => AssetType('', [], '', '', 0, 0, ''));
+    if (eurAsset.sellPrice <= 0) return;
+
+    // GBP ≈ EUR × 1.15 (yaklaşık çapraz kur)
+    double gbpEstimate = eurAsset.sellPrice * 1.15;
+    double gbpBuy = gbpEstimate * 0.997;
+    gbpAsset.applyNewPrices(gbpEstimate, gbpBuy, 0);
   }
 
   // ── BİNANCE: Döviz + Kripto + ONS (hızlı) ──
@@ -336,12 +354,12 @@ class PiyasaMotoru {
     }
   }
 
-  // ── SHEETS: Altın & Gümüş fiyatları (yavaş, arka planda) ──
+  // ── SHEETS: Altın & Gümüş & GBP fiyatları ──
   Future<void> _fetchSheetsData() async {
     try {
       final response = await http.get(Uri.parse(
           'https://docs.google.com/spreadsheets/d/1hXX1HmhjTGihxapua3D9iV3gq0kNRufy2ZQDD7HykeU/export?format=csv'))
-          .timeout(const Duration(seconds: 10),
+          .timeout(const Duration(seconds: 15),
               onTimeout: () => http.Response('', 408));
       if (response.statusCode != 200) return;
 
