@@ -15,6 +15,7 @@ import 'sayfalar/guvenlik_sayfalari.dart';
 import 'sayfalar/piyasa_sayfalari.dart';
 import 'sayfalar/portfoy_sayfalari.dart';
 import 'sayfalar/destek_sayfasi.dart';
+import 'sayfalar/borsa_sayfalari.dart';
 
 
 void main() async {
@@ -120,6 +121,7 @@ class _MainLayoutState extends State<MainLayout> {
   void initState() {
     super.initState();
     _loadAuthData();
+    PremiumManager.checkPremiumStatus();
 
     _motor = PiyasaMotoru(onUpdate: () {
       if (mounted && !_isPageAnimating && !_updateScheduled) {
@@ -213,6 +215,8 @@ class _MainLayoutState extends State<MainLayout> {
             builder: (c) => PortfolioCreator(
                 isCredit: isCredit,
                 market: _motor.market,
+                borsaMarket: _motor.borsaMarket,
+                isPremium: PremiumManager.isPremium,
                 onSave: (item) {
                   isCredit
                       ? _motor.credits.add(item)
@@ -229,6 +233,8 @@ class _MainLayoutState extends State<MainLayout> {
                 builder: (c) => PortfolioDetail(
                     item: item,
                     market: _motor.market,
+                    borsaMarket: _motor.borsaMarket,
+                    isPremium: PremiumManager.isPremium,
                     isWallet: item.id == "me",
                     onUpdate: () {
                       _motor.saveAllUserData();
@@ -433,6 +439,7 @@ class _MainLayoutState extends State<MainLayout> {
       ListingPage(
           items: _motor.debts,
           market: _motor.market,
+          borsaMarket: _motor.borsaMarket,
           isCredit: false,
           onTap: _openDetail,
           onDelete: (i) => _deletePortfolioItem(i, false),
@@ -440,6 +447,7 @@ class _MainLayoutState extends State<MainLayout> {
       ListingPage(
           items: _motor.credits,
           market: _motor.market,
+          borsaMarket: _motor.borsaMarket,
           isCredit: true,
           onTap: _openDetail,
           onDelete: (i) => _deletePortfolioItem(i, true),
@@ -447,13 +455,33 @@ class _MainLayoutState extends State<MainLayout> {
       PortfolioDetail(
           item: _motor.wallet,
           market: _motor.market,
+          borsaMarket: _motor.borsaMarket,
+          isPremium: PremiumManager.isPremium,
           isWallet: true,
           onUpdate: () {
             _motor.saveAllUserData();
             _motor.recalcLiveValues(notify: true);
           },
           onRefresh: () async => await _motor.fetchLiveData(silent: false),
-          onAssetTap: (asset) => _showAssetDetail(context, asset))
+          onAssetTap: (asset) => _showAssetDetail(context, asset)),
+      BorsaPage(
+          borsaMarket: _motor.borsaMarket,
+          isPremium: PremiumManager.isPremium,
+          onPremiumTap: () {
+            Navigator.push(context,
+                MaterialPageRoute(
+                    builder: (c) => const SupportDeveloperPage()));
+          },
+          onRefresh: () async => await _motor.fetchBorsaData(),
+          onAssetTap: (a) => _showAssetDetail(context, a),
+          onReorder: (oldIndex, newIndex) {
+            setState(() {
+              if (newIndex > oldIndex) newIndex -= 1;
+              final item = _motor.borsaMarket.removeAt(oldIndex);
+              _motor.borsaMarket.insert(newIndex, item);
+            });
+            _motor.saveBorsaOrder();
+          }),
     ];
 
     final securedPages = rawPages
@@ -467,7 +495,7 @@ class _MainLayoutState extends State<MainLayout> {
         endDrawer: _buildRightMenu(context),
         appBar: AppBar(
             title: Text(
-                ["ALTIN ASİSTANIM", "BORÇLAR", "ALACAKLAR", "KASA"][_navIndex]),
+                ["ALTIN ASİSTANIM", "BORÇLAR", "ALACAKLAR", "KASA", "BORSA"][_navIndex]),
             actions: [
               if (_motor.isLoading)
                 const Padding(
@@ -528,6 +556,11 @@ class _MainLayoutState extends State<MainLayout> {
                   icon: Icon(Icons.wallet_outlined),
                   selectedIcon: Icon(Icons.wallet, color: AppTheme.goldMain),
                   label: "Kasa"),
+              NavigationDestination(
+                  icon: Icon(Icons.candlestick_chart_outlined),
+                  selectedIcon:
+                      Icon(Icons.candlestick_chart, color: AppTheme.goldMain),
+                  label: "Borsa"),
             ]));
   }
 }

@@ -2,8 +2,34 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../modeller.dart';
+
+/// Global premium abonelik durumu yöneticisi
+class PremiumManager {
+  static bool isPremium = false;
+
+  /// Uygulama açılışında çağır — cache'den hızlı oku, sonra mağazadan doğrula
+  static Future<void> checkPremiumStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    isPremium = prefs.getBool('is_premium') ?? false;
+
+    // Mağazadan doğrula (arka planda)
+    try {
+      final iap = InAppPurchase.instance;
+      final available = await iap.isAvailable();
+      if (available) await iap.restorePurchases();
+    } catch (_) {}
+  }
+
+  /// Satın alma onaylandığında çağır
+  static Future<void> setPremium(bool value) async {
+    isPremium = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_premium', value);
+  }
+}
 
 class SupportDeveloperPage extends StatefulWidget {
   const SupportDeveloperPage({super.key});
@@ -124,6 +150,10 @@ class _SupportDeveloperPageState extends State<SupportDeveloperPage> {
               backgroundColor: AppTheme.neonRed));
         } else if (purchaseDetails.status == PurchaseStatus.purchased ||
             purchaseDetails.status == PurchaseStatus.restored) {
+          // Abonelik ise premium aç
+          if (purchaseDetails.productID == _subscriptionId) {
+            PremiumManager.setPremium(true);
+          }
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text("Desteğiniz için sonsuz teşekkürler! 💛"),
               backgroundColor: AppTheme.goldMain));

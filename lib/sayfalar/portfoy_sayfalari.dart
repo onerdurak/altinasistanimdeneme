@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +10,7 @@ import '../bilesenler/ortak_araclar.dart';
 class ListingPage extends StatefulWidget {
   final List<PortfolioItem> items;
   final List<AssetType> market;
+  final List<AssetType> borsaMarket;
   final bool isCredit;
   final Function(PortfolioItem) onTap;
   final Function(PortfolioItem) onDelete;
@@ -18,6 +20,7 @@ class ListingPage extends StatefulWidget {
       {super.key,
       required this.items,
       required this.market,
+      this.borsaMarket = const [],
       required this.isCredit,
       required this.onTap,
       required this.onDelete,
@@ -49,7 +52,8 @@ class _ListingPageState extends State<ListingPage> {
                     style: TextStyle(color: Colors.white24)))),
       );
     }
-    final marketMap = {for (var a in widget.market) a.id: a};
+    final allMarket = [...widget.market, ...widget.borsaMarket];
+    final marketMap = {for (var a in allMarket) a.id: a};
     return GestureDetector(
       onTap: () => setState(() => _editingItemId = null),
       child: RefreshIndicator(
@@ -62,7 +66,7 @@ class _ListingPageState extends State<ListingPage> {
           itemCount: widget.items.length,
           itemBuilder: (c, i) {
             var item = widget.items[i];
-            double val = item.getTotalValue(widget.market);
+            double val = item.getTotalValue(allMarket);
             bool isEditing = _editingItemId == item.id;
             bool isExpanded = !_collapsedItems.contains(item.id);
 
@@ -240,12 +244,16 @@ class _ListingPageState extends State<ListingPage> {
 class PortfolioCreator extends StatefulWidget {
   final bool isCredit;
   final List<AssetType> market;
+  final List<AssetType> borsaMarket;
+  final bool isPremium;
   final Function(PortfolioItem) onSave;
 
   const PortfolioCreator(
       {super.key,
       required this.isCredit,
       required this.market,
+      this.borsaMarket = const [],
+      this.isPremium = false,
       required this.onSave});
 
   @override
@@ -328,7 +336,8 @@ class _PortfolioCreatorState extends State<PortfolioCreator> {
 
   @override
   Widget build(BuildContext context) {
-    final marketMap = {for (var a in widget.market) a.id: a};
+    final allMarket = [...widget.market, ...widget.borsaMarket];
+    final marketMap = {for (var a in allMarket) a.id: a};
     double liveTotal = 0;
     _liveAssets.forEach((k, v) {
       var asset = marketMap[k];
@@ -534,6 +543,8 @@ class _PortfolioCreatorState extends State<PortfolioCreator> {
 class PortfolioDetail extends StatefulWidget {
   final PortfolioItem item;
   final List<AssetType> market;
+  final List<AssetType> borsaMarket;
+  final bool isPremium;
   final VoidCallback onUpdate;
   final bool isWallet;
   final Future<void> Function() onRefresh;
@@ -543,6 +554,8 @@ class PortfolioDetail extends StatefulWidget {
       {super.key,
       required this.item,
       required this.market,
+      this.borsaMarket = const [],
+      this.isPremium = false,
       required this.onUpdate,
       this.isWallet = false,
       required this.onRefresh,
@@ -606,6 +619,41 @@ class _PortfolioDetailState extends State<PortfolioDetail> {
     }
   }
 
+  Widget _buildAssetTile(AssetType g) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+          color: AppTheme.card,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(
+                color: Color(0x66000000),
+                blurRadius: 10,
+                offset: Offset(0, 5))
+          ]),
+      child: ListTile(
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: AssetCoin(type: g, size: 40),
+        title: Text(g.name,
+            style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 16)),
+        subtitle: Text(
+            "Canlı: ${NumberFormat.currency(locale: 'tr_TR', symbol: '₺', decimalDigits: 0).format(g.sellPrice)}",
+            style: const TextStyle(color: Colors.grey, fontSize: 12)),
+        trailing: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: const BoxDecoration(
+                color: Color(0x26FFD700), shape: BoxShape.circle),
+            child: const Icon(Icons.add,
+                color: AppTheme.goldMain, size: 22)),
+        onTap: () => _addAssetDialog(g),
+      ),
+    );
+  }
+
   void _showAddMenu() {
     showModalBottomSheet(
       context: context,
@@ -634,47 +682,102 @@ class _PortfolioDetailState extends State<PortfolioDetail> {
                     letterSpacing: 1.2)),
             const SizedBox(height: 20),
             Expanded(
-              child: ListView.builder(
+              child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 physics: const BouncingScrollPhysics(),
-                itemCount: widget.market.length,
-                itemBuilder: (c, i) {
-                  var g = widget.market[i];
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                        color: AppTheme.card,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                              color: const Color(0x66000000),
-                              blurRadius: 10,
-                              offset: const Offset(0, 5))
-                        ]),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      leading: AssetCoin(type: g, size: 40),
-                      title: Text(g.name,
-                          style: const TextStyle(
-                              color: Colors.white,
+                children: [
+                  // ── Standart varlıklar ──
+                  ...widget.market.map((g) => _buildAssetTile(g)),
+
+                  // ── Borsa hisseleri bölümü ──
+                  if (widget.borsaMarket.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    const Divider(color: Colors.white10),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Container(
+                          width: 3, height: 20, color: AppTheme.goldMain),
+                      const SizedBox(width: 8),
+                      const Text("BORSA HİSSELERİ",
+                          style: TextStyle(
+                              color: AppTheme.goldMain,
+                              fontSize: 14,
                               fontWeight: FontWeight.bold,
-                              fontSize: 16)),
-                      subtitle: Text(
-                          "Canlı: ${NumberFormat.currency(locale: 'tr_TR', symbol: '₺', decimalDigits: 0).format(g.sellPrice)}",
-                          style: const TextStyle(
-                              color: Colors.grey, fontSize: 12)),
-                      trailing: Container(
-                          padding: const EdgeInsets.all(8),
+                              letterSpacing: 1)),
+                      if (!widget.isPremium) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                              color: const Color(0x26FFD700),
-                              shape: BoxShape.circle),
-                          child: const Icon(Icons.add,
-                              color: AppTheme.goldMain, size: 22)),
-                      onTap: () => _addAssetDialog(g),
-                    ),
-                  );
-                },
+                              color: Color(0x33FFD700),
+                              borderRadius: BorderRadius.circular(4)),
+                          child: const Text("PREMIUM",
+                              style: TextStyle(
+                                  color: AppTheme.goldMain,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ]),
+                    const SizedBox(height: 12),
+                    if (widget.isPremium)
+                      ...widget.borsaMarket
+                          .where((g) => g.sellPrice > 0)
+                          .map((g) => _buildAssetTile(g))
+                    else
+                      // Bulanık kilitli önizleme
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: SizedBox(
+                          height: 200,
+                          child: Stack(children: [
+                            Positioned.fill(
+                              child: ImageFiltered(
+                                imageFilter:
+                                    ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                                child: Column(
+                                  children: List.generate(
+                                      3,
+                                      (i) => Container(
+                                            margin: const EdgeInsets.only(
+                                                bottom: 8),
+                                            height: 56,
+                                            decoration: BoxDecoration(
+                                                color: AppTheme.card,
+                                                borderRadius:
+                                                    BorderRadius.circular(12)),
+                                          )),
+                                ),
+                              ),
+                            ),
+                            Positioned.fill(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.3),
+                                    borderRadius: BorderRadius.circular(16)),
+                                child: const Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.lock_outline,
+                                          color: AppTheme.goldMain, size: 32),
+                                      SizedBox(height: 8),
+                                      Text("Premium Abonelik Gerekli",
+                                          style: TextStyle(
+                                              color: AppTheme.goldMain,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ]),
+                        ),
+                      ),
+                  ],
+                ],
               ),
             ),
           ],
@@ -727,8 +830,9 @@ class _PortfolioDetailState extends State<PortfolioDetail> {
 
   @override
   Widget build(BuildContext context) {
-    final marketMap = {for (var a in widget.market) a.id: a};
-    double total = widget.item.getTotalValue(widget.market);
+    final allMarket = [...widget.market, ...widget.borsaMarket];
+    final marketMap = {for (var a in allMarket) a.id: a};
+    double total = widget.item.getTotalValue(allMarket);
 
     return Scaffold(
       appBar:

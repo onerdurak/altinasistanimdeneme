@@ -48,6 +48,10 @@ class PiyasaMotoru {
   /// Sheets'ten okunan güncel sürüm bilgisi (Canlı Kur B21)
   String sheetVersion = '';
 
+  /// BORSA — BIST 100 hisse senetleri (ayrı liste)
+  List<AssetType> borsaMarket = [];
+  bool isBorsaLoaded = false;
+
   Timer? _refreshTimer;
   Timer? _simulationTimer;
   final Random _random = Random();
@@ -60,6 +64,10 @@ class PiyasaMotoru {
   // Google Sheets saatlik veri URL'si (saatlik sekmesi)
   static const String _sheetsSaatlikUrl =
       'https://docs.google.com/spreadsheets/d/1hXX1HmhjTGihxapua3D9iV3gq0kNRufy2ZQDD7HykeU/export?format=csv&gid=395501293';
+
+  // Google Sheets Borsa Canlı (sheet adıyla çekilir)
+  static const String _sheetsBorsaUrl =
+      'https://docs.google.com/spreadsheets/d/1hXX1HmhjTGihxapua3D9iV3gq0kNRufy2ZQDD7HykeU/gviz/tq?tqx=out:csv&sheet=Borsa%20Canl%C4%B1';
 
   PiyasaMotoru({required this.onUpdate});
 
@@ -86,10 +94,13 @@ class PiyasaMotoru {
 
   void baslat() {
     _initializeMarketSkeleton();
+    _initializeBorsaSkeleton();
     loadMarketOrder();
+    loadBorsaOrder();
     loadAllUserData().then((_) async {
       // 1. Önce cache'den hızlı aç (eski verilerle anında göster)
       await loadMarketCache();
+      await loadBorsaCache();
       recalcLiveValues(notify: true);
 
       // 2. Sonra 1 kez veri çek, matrix başlat
@@ -99,6 +110,8 @@ class PiyasaMotoru {
       // Sheets'ten geçmiş + saatlik verileri çek, sonra boşlukları doldur
       _fetchHistoricalFromSheets().then((_) => fillHistoricalGaps());
       _fetchIntraDayFromSheets();
+      // Borsa verisini 2 saniye sonra çek (Sheets yükünü dağıt)
+      Future.delayed(const Duration(seconds: 2), () => fetchBorsaData());
     });
 
     // 5 dakikada bir veri çek (arada sadece matrix çalışır)
@@ -106,6 +119,8 @@ class PiyasaMotoru {
       fetchLiveData(silent: true).then((_) {
         _lastFetchTime = DateTime.now();
       });
+      // Borsa verisini de güncelle
+      Future.delayed(const Duration(seconds: 2), () => fetchBorsaData());
     });
     // İlk veri gelene kadar 3 saniye bekle, sonra simulation başlat
     Future.delayed(const Duration(seconds: 3), () {
@@ -894,6 +909,124 @@ class PiyasaMotoru {
     List<String> orderIds = market.map((e) => e.id).toList();
     await prefs.setStringList('market_order', orderIds);
   }
+
+  // ══════════════════════════════════════════════════════
+  //  BORSA — BIST 100
+  // ══════════════════════════════════════════════════════
+
+  static const _bist100Tickers = [
+    'AEFES','AGESA','AKBNK','AKFGY','AKFYE','AKSA','AKSEN','ALARK','ALFAS','ALGYO',
+    'ARCLK','ASELS','ASTOR','BERA','BIMAS','BRISA','BRYAT','BUCIM','CCOLA','CEMTS',
+    'CIMSA','CWENE','DOHOL','ECILC','EGEEN','EKGYO','ENJSA','ENKAI','EREGL','EUPWR',
+    'FROTO','GARAN','GENIL','GUBRF','HALKB','HEKTS','ISCTR','ISGYO','KCHOL','KLSER',
+    'KMPUR','KONTR','KONYA','KOZAA','KOZAL','KRDMD','KZBGY','MAVI','MGROS','MPARK',
+    'OBAMS','ODAS','OTKAR','OYAKC','PETKM','PGSUS','SAHOL','SASA','SELEC','SISE',
+    'SKBNK','SMRTG','SOKM','TAVHL','TCELL','THYAO','TKFEN','TOASO','TSKB','TTKOM',
+    'TTRAK','TUBIL','TUPRS','TURSG','ULKER','VAKBN','VESBE','VESTL','YKBNK','ZOREN',
+    'AGHOL','ANSGR','BASGZ','BIOEN','BTCIM','CANTE','DOAS','ESSEN','GESAN','GLYHO',
+    'GOLTS','INDES','IPEKE','KAYSE','KERVT','KONKA','LIDER','LOGO','MAGEN','NETAS',
+  ];
+
+  void _initializeBorsaSkeleton() {
+    borsaMarket = _bist100Tickers.map((t) => AssetType(
+      t.toLowerCase(), [t], t, t, 0, 0, 'borsa',
+      manualInput: true,
+    )).toList();
+  }
+
+  Future<void> fetchBorsaData() async {
+    try {
+      final response = await http.get(Uri.parse(_sheetsBorsaUrl))
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode != 200) return;
+
+      List<String> lines = response.body.split('\n');
+      if (lines.length < 2) return;
+
+      Map<String, Map<String, double>> borsaData = {};
+      for (int i = 1; i < lines.length; i++) {
+        String line = lines[i].trim();
+        if (line.isEmpty) continue;
+        List<String> cols = _parseCsvLine(line);
+        if (cols.length < 2) continue;
+        String kod = cols[0].trim().toUpperCase().replaceAll('"', '');
+        double price = _parseTurkishNumber(cols[1]);
+        double change = cols.length >= 3 ? _parseTurkishNumber(cols[2]) * 100 : 0;
+        if (kod.isNotEmpty && price > 0) {
+          borsaData[kod] = {'price': price, 'change': change};
+        }
+      }
+
+      if (borsaData.isEmpty) return;
+
+      for (var asset in borsaMarket) {
+        var data = borsaData[asset.id.toUpperCase()];
+        if (data == null) continue;
+        double price = data['price']!;
+        double change = data['change']!;
+        if (price <= 0) continue;
+        asset.applyNewPrices(price, price * 0.998, change);
+      }
+
+      isBorsaLoaded = true;
+      saveBorsaCache();
+      _notifyAll();
+    } catch (e) {
+      // Sessizce devam et
+    }
+  }
+
+  Future<void> loadBorsaCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.containsKey('borsa_cache')) {
+      try {
+        Map<String, dynamic> cache =
+            jsonDecode(prefs.getString('borsa_cache')!);
+        for (var a in borsaMarket) {
+          if (cache.containsKey(a.id)) {
+            a.applyNewPrices(cache[a.id]['bs'] ?? 0.0,
+                cache[a.id]['bb'] ?? 0.0, cache[a.id]['c'] ?? 0.0);
+          }
+        }
+      } catch (e) {}
+    }
+  }
+
+  Future<void> saveBorsaCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    Map<String, dynamic> cache = {
+      for (var a in borsaMarket)
+        if (a.baseSellPrice > 0)
+          a.id: {'bs': a.baseSellPrice, 'bb': a.baseBuyPrice, 'c': a.changeRate}
+    };
+    await prefs.setString('borsa_cache', jsonEncode(cache));
+  }
+
+  Future<void> loadBorsaOrder() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.containsKey('borsa_order')) {
+      List<String>? orderIds = prefs.getStringList('borsa_order');
+      if (orderIds != null && orderIds.isNotEmpty) {
+        borsaMarket.sort((a, b) => (orderIds.indexOf(a.id) == -1
+                ? 999
+                : orderIds.indexOf(a.id))
+            .compareTo(
+                orderIds.indexOf(b.id) == -1 ? 999 : orderIds.indexOf(b.id)));
+      }
+    }
+  }
+
+  Future<void> saveBorsaOrder() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+        'borsa_order', borsaMarket.map((e) => e.id).toList());
+  }
+
+  /// market + borsaMarket birleşik harita (portföy hesaplaması için)
+  Map<String, AssetType> get allAssetsMap => {
+    for (var a in market) a.id: a,
+    for (var a in borsaMarket) a.id: a,
+  };
 
   Future<void> loadAllUserData() async {
     final prefs = await SharedPreferences.getInstance();

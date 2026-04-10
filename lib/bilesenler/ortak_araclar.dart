@@ -122,6 +122,12 @@ class AssetCoin extends StatelessWidget {
         return _CoinStyle(
             const Color(0xFF546E7A), const Color(0xFF263238),
             Colors.white, 'Ξ');
+      case 'borsa':
+        return _CoinStyle(
+            const Color(0xFF0277BD), const Color(0xFF01579B),
+            Colors.white, type.shortName.length > 2
+                ? type.shortName.substring(0, 2)
+                : type.shortName);
       default:
         return _CoinStyle(
             const Color(0xFFE65100), const Color(0xFF8B3000),
