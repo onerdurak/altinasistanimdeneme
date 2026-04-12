@@ -45,13 +45,9 @@ class _BorsaPageState extends State<BorsaPage> {
   bool _storeLoading = true;
   bool _restoring = false;
 
-  // Platform bazlı ürün ID'leri
-  static final Set<String> _googleIds = {
-    'destek_100', 'destek_200', 'destek_500', 'destek_1000', 'aylik20plan',
-  };
-  static final Set<String> _appleIds = {
-    'bronz_destek', 'gumus_destek', 'altin_destek', 'platin_destek', 'aylik_destek',
-  };
+  // Platform bazlı ürün ID'leri (sadece aylık abonelik)
+  static final Set<String> _googleIds = {'aylik20plan'};
+  static final Set<String> _appleIds = {'aylik_destek'};
   Set<String> get _kIds => Platform.isIOS ? _appleIds : _googleIds;
   String get _subscriptionId => Platform.isIOS ? 'aylik_destek' : 'aylik20plan';
 
@@ -110,13 +106,9 @@ class _BorsaPageState extends State<BorsaPage> {
     if (mounted && _restoring) setState(() => _restoring = false);
   }
 
-  void _buyProduct(ProductDetails product) {
+  void _buySubscription(ProductDetails product) {
     final param = PurchaseParam(productDetails: product);
-    if (product.id == _subscriptionId) {
-      _iap.buyNonConsumable(purchaseParam: param);
-    } else {
-      _iap.buyConsumable(purchaseParam: param);
-    }
+    _iap.buyNonConsumable(purchaseParam: param);
   }
 
   Future<void> _restorePurchases() async {
@@ -150,10 +142,6 @@ class _BorsaPageState extends State<BorsaPage> {
     } catch (_) {
       subProduct = null;
     }
-    // Tek seferlik ürünler
-    final oneTimeProducts =
-        _products.where((p) => p.id != _subscriptionId).toList();
-
     return Stack(
       children: [
         // Arka planda bulanık önizleme
@@ -249,7 +237,7 @@ class _BorsaPageState extends State<BorsaPage> {
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10)),
                               ),
-                              onPressed: () => _buyProduct(subProduct!),
+                              onPressed: () => _buySubscription(subProduct!),
                               child: Text("${subProduct.price} / Ay",
                                   style: const TextStyle(
                                       fontWeight: FontWeight.bold,
@@ -259,58 +247,6 @@ class _BorsaPageState extends State<BorsaPage> {
                         ]),
                       ),
                       const SizedBox(height: 16),
-                    ],
-
-                    // ── Tek seferlik destek paketleri ──
-                    if (oneTimeProducts.isNotEmpty) ...[
-                      const Text("veya tek seferlik destek ile Premium kazan",
-                          style: TextStyle(
-                              color: Colors.white54, fontSize: 12)),
-                      const SizedBox(height: 10),
-                      ...oneTimeProducts.map((p) {
-                        final months =
-                            PremiumManager.productPremiumMonths[p.id] ?? 0;
-                        final label = months > 0
-                            ? "$months Ay Premium"
-                            : "Destek";
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: AppTheme.card,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                                color: AppTheme.goldMain.withAlpha(50)),
-                          ),
-                          child: ListTile(
-                            dense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 0),
-                            leading: const Icon(Icons.workspace_premium,
-                                color: AppTheme.goldMain, size: 22),
-                            title: Text(label,
-                                style: const TextStyle(
-                                    color: AppTheme.goldMain,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13)),
-                            trailing: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.goldMain,
-                                foregroundColor: Colors.black,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 6),
-                                minimumSize: Size.zero,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8)),
-                              ),
-                              onPressed: () => _buyProduct(p),
-                              child: Text(p.price,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12)),
-                            ),
-                          ),
-                        );
-                      }),
                     ],
 
                     const SizedBox(height: 16),
