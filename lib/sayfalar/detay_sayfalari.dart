@@ -68,6 +68,15 @@ class _FullScreenAssetPageState extends State<FullScreenAssetPage> {
     return AppTheme.goldMain;
   }
 
+  /// Borsa hissesi mi? category 'borsa' ise saatlik veriyi motordan al
+  bool get _isBorsaAsset => widget.asset.category == 'borsa';
+
+  /// Borsa veya normal saatlik veri kaynağını seç
+  List<Map<String, dynamic>> get _activeIntraDayHistory =>
+      _isBorsaAsset
+          ? (widget.motor?.borsaIntraDayHistory ?? [])
+          : widget.intraDayHistory;
+
   List<Map<String, dynamic>> _generateChartData(String period) {
     List<Map<String, dynamic>> result = [];
     DateTime now = DateTime.now();
@@ -78,7 +87,8 @@ class _FullScreenAssetPageState extends State<FullScreenAssetPage> {
     if (currentPrice <= 0) currentPrice = 1;
 
     if (period == '1G') {
-      if (widget.intraDayHistory.isEmpty) {
+      final intraData = _activeIntraDayHistory;
+      if (intraData.isEmpty) {
         // Gerçek veri yokken dalgalı saatlik simülasyon oluştur
         final random = Random();
         for (int h = 23; h >= 0; h--) {
@@ -94,17 +104,23 @@ class _FullScreenAssetPageState extends State<FullScreenAssetPage> {
         result.last['val'] = currentPrice;
       } else {
         DateTime yesterday = now.subtract(const Duration(hours: 24));
-        for (var log in widget.intraDayHistory) {
-          DateTime logTime = DateFormat('yyyy-MM-dd HH:mm').parse(log["time"]);
+        for (var log in intraData) {
+          String timeRaw = log["time"] ?? '';
+          DateTime logTime;
+          try {
+            logTime = DateFormat('yyyy-MM-dd HH:mm').parse(timeRaw);
+          } catch (_) {
+            continue;
+          }
           if (logTime.isAfter(yesterday)) {
             double p = (log["prices"][widget.asset.id] as num?)?.toDouble() ?? 0;
-            // Veri yoksa referans emtiadan türet
-            if (p <= 0 && currentPrice > 0) {
+            // Borsa hissesi olmayan varlıklar için referans emtiadan türet
+            if (p <= 0 && currentPrice > 0 && !_isBorsaAsset) {
               String refId = widget.asset.isDollarBase ? 'ons' : 'has';
               double refP = (log["prices"][refId] as num?)?.toDouble() ?? 0;
               if (refP > 0) {
                 double nowRef = widget.asset.isDollarBase ? 4672.80 : 6900;
-                for (var lg in widget.intraDayHistory) {
+                for (var lg in intraData) {
                   double r = (lg["prices"][refId] as num?)?.toDouble() ?? 0;
                   if (r > 0) nowRef = r;
                 }

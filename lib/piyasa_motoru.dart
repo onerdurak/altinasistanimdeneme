@@ -52,6 +52,9 @@ class PiyasaMotoru {
   List<AssetType> borsaMarket = [];
   bool isBorsaLoaded = false;
 
+  /// Borsa hisseleri saatlik geçmiş (grafik için)
+  List<Map<String, dynamic>> borsaIntraDayHistory = [];
+
   Timer? _refreshTimer;
   Timer? _simulationTimer;
   final Random _random = Random();
@@ -68,6 +71,10 @@ class PiyasaMotoru {
   // Google Sheets Borsa Canlı (sheet adıyla çekilir)
   static const String _sheetsBorsaUrl =
       'https://docs.google.com/spreadsheets/d/1hXX1HmhjTGihxapua3D9iV3gq0kNRufy2ZQDD7HykeU/gviz/tq?tqx=out:csv&sheet=Borsa%20Canl%C4%B1';
+
+  // Google Sheets Borsa Saatlik (hisse saatlik geçmiş verileri)
+  static const String _sheetsBorsaSaatlikUrl =
+      'https://docs.google.com/spreadsheets/d/1hXX1HmhjTGihxapua3D9iV3gq0kNRufy2ZQDD7HykeU/gviz/tq?tqx=out:csv&sheet=Borsa%20Saatlik';
 
   PiyasaMotoru({required this.onUpdate});
 
@@ -111,7 +118,10 @@ class PiyasaMotoru {
       _fetchHistoricalFromSheets().then((_) => fillHistoricalGaps());
       _fetchIntraDayFromSheets();
       // Borsa verisini 2 saniye sonra çek (Sheets yükünü dağıt)
-      Future.delayed(const Duration(seconds: 2), () => fetchBorsaData());
+      Future.delayed(const Duration(seconds: 2), () {
+        fetchBorsaData();
+        _fetchBorsaIntraDayFromSheets();
+      });
     });
 
     // 5 dakikada bir veri çek (arada sadece matrix çalışır)
@@ -120,7 +130,10 @@ class PiyasaMotoru {
         _lastFetchTime = DateTime.now();
       });
       // Borsa verisini de güncelle
-      Future.delayed(const Duration(seconds: 2), () => fetchBorsaData());
+      Future.delayed(const Duration(seconds: 2), () {
+        fetchBorsaData();
+        _fetchBorsaIntraDayFromSheets();
+      });
     });
     // İlk veri gelene kadar 3 saniye bekle, sonra simulation başlat
     Future.delayed(const Duration(seconds: 3), () {
@@ -969,7 +982,7 @@ class PiyasaMotoru {
         if (cols.length < 2) continue;
         String kod = cols[0].trim().toUpperCase().replaceAll('"', '');
         double price = _parseTurkishNumber(cols[1]);
-        double change = cols.length >= 3 ? _parseTurkishNumber(cols[2]) * 100 : 0;
+        double change = cols.length >= 3 ? _parseTurkishNumber(cols[2]) : 0;
         if (kod.isNotEmpty && price > 0) {
           borsaData[kod] = {'price': price, 'change': change};
         }
@@ -1040,6 +1053,115 @@ class PiyasaMotoru {
         'borsa_order', borsaMarket.map((e) => e.id).toList());
   }
 
+  // ------------------------------------------------------------------
+  // BORSA SAATLİK VERİ ÇEK (Hisse grafikleri için)
+  // ------------------------------------------------------------------
+  // Sheets formatı:
+  //   TARİH/SAAT  | THYAO  | ASELS | GARAN | EREGL | ...
+  //   2026-04-12 09:00 | 195,30 | 52,40 | 124,50 | 50,80 | ...
+  //   2026-04-12 10:00 | 196,10 | 52,80 | 125,10 | 51,00 | ...
+  // ------------------------------------------------------------------
+  Future<void> _fetchBorsaIntraDayFromSheets() async {
+    try {
+      final response = await http.get(Uri.parse(_sheetsBorsaSaatlikUrl))
+          .timeout(const Duration(seconds: 15),
+              onTimeout: () => http.Response('', 408));
+      if (response.statusCode != 200) return;
+
+      String csvBody = response.body.trim();
+      // gviz bazen ilk satıra boş/meta satırı koyar — temizle
+      if (csvBody.startsWith('google.visualization')) {
+        // JSON formatında gelmiş → CSV olarak tekrar dene
+        return;
+      }
+
+      List<String> lines = csvBody.split('\n');
+      if (lines.length < 2) return;
+
+      // Header: TARİH/SAAT, THYAO, ASELS, GARAN, ...
+      List<String> headers = _parseCsvLine(lines[0])
+          .map((h) => h.trim().toLowerCase()
+              .replaceAll('"', '')
+              .replaceAll('tarih/saat', 'time')
+              .replaceAll('tarih', 'time'))
+          .toList();
+
+      int iTime = headers.indexOf('time');
+      if (iTime < 0) iTime = 0;
+
+      List<Map<String, dynamic>> sheetsBorsaIntra = [];
+
+      for (int i = 1; i < lines.length; i++) {
+        String line = lines[i].trim();
+        if (line.isEmpty) continue;
+        List<String> cols = _parseCsvLine(line);
+        if (cols.isEmpty) continue;
+
+        String timeStr = cols[iTime].trim().replaceAll('"', '');
+        if (timeStr.isEmpty) continue;
+
+        Map<String, dynamic> prices = {};
+        for (int j = 0; j < headers.length; j++) {
+          if (j == iTime) continue;
+          String kod = headers[j].trim().replaceAll('"', '');
+          if (kod.isEmpty) continue;
+          double val = _getCol(cols, j);
+          if (val > 0) prices[kod] = val;
+        }
+
+        if (prices.isNotEmpty) {
+          sheetsBorsaIntra.add({"time": timeStr, "prices": prices});
+        }
+      }
+
+      if (sheetsBorsaIntra.isNotEmpty) {
+        // Sheets verisi ile yerel veriyi birleştir (Sheets öncelikli)
+        Map<String, Map<String, dynamic>> merged = {};
+        for (var entry in sheetsBorsaIntra) {
+          merged[entry["time"]] = entry;
+        }
+        for (var entry in borsaIntraDayHistory) {
+          String key = entry["time"];
+          if (!merged.containsKey(key)) {
+            merged[key] = entry;
+          }
+        }
+        List<String> sortedKeys = merged.keys.toList()..sort();
+        borsaIntraDayHistory = sortedKeys.map((k) => merged[k]!).toList();
+        // Son 288 kayıt (yaklaşık 12 gün × 24 saat veya işlem saatleri)
+        if (borsaIntraDayHistory.length > 288) {
+          borsaIntraDayHistory = borsaIntraDayHistory
+              .sublist(borsaIntraDayHistory.length - 288);
+        }
+
+        // Cache'e kaydet
+        _saveBorsaIntraDayCache();
+      }
+    } catch (e) {
+      // Sessizce devam et
+    }
+  }
+
+  Future<void> _saveBorsaIntraDayCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+          'borsa_intraday_history', jsonEncode(borsaIntraDayHistory));
+    } catch (_) {}
+  }
+
+  Future<void> _loadBorsaIntraDayCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.containsKey('borsa_intraday_history')) {
+        borsaIntraDayHistory =
+            (jsonDecode(prefs.getString('borsa_intraday_history')!) as List)
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList();
+      }
+    } catch (_) {}
+  }
+
   /// market + borsaMarket birleşik harita (portföy hesaplaması için)
   Map<String, AssetType> get allAssetsMap => {
     for (var a in market) a.id: a,
@@ -1082,6 +1204,9 @@ class PiyasaMotoru {
           assetHistory[key] = Map<String, dynamic>.from(value);
         });
       }
+
+      // Borsa saatlik cache'i yükle
+      await _loadBorsaIntraDayCache();
     } catch (e) {}
   }
 
